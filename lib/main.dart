@@ -1,122 +1,124 @@
 import 'package:flutter/material.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:provider/provider.dart';
+import 'package:timezone/data/latest.dart' as tz;
+import 'package:timezone/timezone.dart' as tz;
+import 'firebase_options.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'services/ad_service.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/date_symbol_data_local.dart'; // intl 초기화
+import '../services/auth_service.dart';
+import '../services/firestore_service.dart';
+import '../services/notification_service.dart';
+import '../screens/splash_screen.dart';
+import '../models/user.dart'; // FirebaseAuth User를 간단히 사용
+import '../utils/logger.dart';
 
-void main() {
-  runApp(const MyApp());
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // .env 파일 로드. 앱 시작 시 딱 한 번만 호출하면 됩니다.
+  await dotenv.load(fileName: ".env");
+
+  MobileAds.instance.initialize();
+
+  // Firebase 초기화 (firebase_options.dart 사용)
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
+
+  await GoogleSignIn.instance.initialize(
+    serverClientId: dotenv.env['GOOGLE_LOGIN_WEB_CLIENT_ID'],
+  );
+  // intl 로캘 데이터 초기화 (DateFormat 사용 전 필수)
+  await initializeDateFormatting('ko_KR');
+
+  // 타임존 데이터 초기화
+  tz.initializeTimeZones();
+  // 한국 시간대로 설정
+  try {
+    tz.setLocalLocation(tz.getLocation('Asia/Seoul'));
+  } catch (e) {
+    logger.e('Could not set local location: $e');
+  }
+
+  // 알림 서비스 초기화
+  final notificationService = NotificationService();
+  await notificationService.init();
+
+  // 광고 서비스 생성
+  final adService = AdService();
+
+  runApp(MyApp(
+    notificationService: notificationService,
+    adService: adService,
+  ));
 }
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final NotificationService notificationService;
+  final AdService adService;
 
-  // This widget is the root of your application.
-  @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'Flutter Demo',
-      theme: ThemeData(
-        // This is the theme of your application.
-        //
-        // TRY THIS: Try running your application with "flutter run". You'll see
-        // the application has a purple toolbar. Then, without quitting the app,
-        // try changing the seedColor in the colorScheme below to Colors.green
-        // and then invoke "hot reload" (save your changes or press the "hot
-        // reload" button in a Flutter-supported IDE, or press "r" if you used
-        // the command line to start the app).
-        //
-        // Notice that the counter didn't reset back to zero; the application
-        // state is not lost during the reload. To reset the state, use hot
-        // restart instead.
-        //
-        // This works for code too, not just values: Most code changes can be
-        // tested with just a hot reload.
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-      ),
-      home: const MyHomePage(title: 'Flutter Demo Home Page'),
-    );
-  }
-}
-
-class MyHomePage extends StatefulWidget {
-  const MyHomePage({super.key, required this.title});
-
-  // This widget is the home page of your application. It is stateful, meaning
-  // that it has a State object (defined below) that contains fields that affect
-  // how it looks.
-
-  // This class is the configuration for the state. It holds the values (in this
-  // case the title) provided by the parent (in this case the App widget) and
-  // used by the build method of the State. Fields in a Widget subclass are
-  // always marked "final".
-
-  final String title;
-
-  @override
-  State<MyHomePage> createState() => _MyHomePageState();
-}
-
-class _MyHomePageState extends State<MyHomePage> {
-  int _counter = 0;
-
-  void _incrementCounter() {
-    setState(() {
-      // This call to setState tells the Flutter framework that something has
-      // changed in this State, which causes it to rerun the build method below
-      // so that the display can reflect the updated values. If we changed
-      // _counter without calling setState(), then the build method would not be
-      // called again, and so nothing would appear to happen.
-      _counter++;
-    });
-  }
+  const MyApp({
+    super.key,
+    required this.notificationService,
+    required this.adService,
+  });
 
   @override
   Widget build(BuildContext context) {
-    // This method is rerun every time setState is called, for instance as done
-    // by the _incrementCounter method above.
-    //
-    // The Flutter framework has been optimized to make rerunning build methods
-    // fast, so that you can just rebuild anything that needs updating rather
-    // than having to individually change instances of widgets.
-    return Scaffold(
-      appBar: AppBar(
-        // TRY THIS: Try changing the color here to a specific color (to
-        // Colors.amber, perhaps?) and trigger a hot reload to see the AppBar
-        // change color while the other colors stay the same.
-        backgroundColor: Theme.of(context).colorScheme.inversePrimary,
-        // Here we take the value from the MyHomePage object that was created by
-        // the App.build method, and use it to set our appbar title.
-        title: Text(widget.title),
-      ),
-      body: Center(
-        // Center is a layout widget. It takes a single child and positions it
-        // in the middle of the parent.
-        child: Column(
-          // Column is also a layout widget. It takes a list of children and
-          // arranges them vertically. By default, it sizes itself to fit its
-          // children horizontally, and tries to be as tall as its parent.
-          //
-          // Column has various properties to control how it sizes itself and
-          // how it positions its children. Here we use mainAxisAlignment to
-          // center the children vertically; the main axis here is the vertical
-          // axis because Columns are vertical (the cross axis would be
-          // horizontal).
-          //
-          // TRY THIS: Invoke "debug painting" (choose the "Toggle Debug Paint"
-          // action in the IDE, or press "p" in the console), to see the
-          // wireframe for each widget.
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: <Widget>[
-            const Text('You have pushed the button this many times:'),
-            Text(
-              '$_counter',
-              style: Theme.of(context).textTheme.headlineMedium,
-            ),
-          ],
+    return MultiProvider(
+      providers: [
+        // AdService 제공
+        Provider<AdService>(
+          create: (_) => adService,
         ),
+        // AuthService 제공
+        Provider<AuthService>(
+          create: (_) => AuthService(),
+        ),
+        // NotificationService 제공
+        Provider<NotificationService>(
+          create: (_) => notificationService,
+        ),
+        // 유저 스트림 제공
+        StreamProvider<AppUser?>(
+          create: (context) => context.read<AuthService>().user,
+          initialData: null,
+        ),
+        // FirestoreService 제공 (AuthService에 의존)
+        ProxyProvider<AppUser?, FirestoreService>(
+          update: (_, user, _) => FirestoreService(uid: user?.uid),
+        ),
+      ],
+      child: MaterialApp(
+        title: '등하원 알리미',
+        // 시스템 테마(라이트/다크) 설정
+        themeMode: ThemeMode.system,
+        // 라이트 테마
+        theme: ThemeData(
+          useMaterial3: true,
+          brightness: Brightness.light,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.indigo,
+            brightness: Brightness.light,
+          ),
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+
+        // 다크 테마
+        darkTheme: ThemeData(
+          useMaterial3: true,
+          brightness: Brightness.dark,
+          colorScheme: ColorScheme.fromSeed(
+            seedColor: Colors.indigo,
+            brightness: Brightness.dark,
+          ),
+          visualDensity: VisualDensity.adaptivePlatformDensity,
+        ),
+        home: const SplashScreen(),
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _incrementCounter,
-        tooltip: 'Increment',
-        child: const Icon(Icons.add),
-      ), // This trailing comma makes auto-formatting nicer for build methods.
     );
   }
 }
