@@ -1,3 +1,4 @@
+import 'dart:async'; // Completer를 위해 import 추가
 import 'package:flutter/foundation.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -21,6 +22,12 @@ class AdService {
   BannerAd get bannerAdList => _bannerAdList!;
   BannerAd get bannerAdMgmt => _bannerAdMgmt!;
 
+  // 광고 로드 완료를 보장하기 위한 Completer 추가
+  Completer<void> _appOpenAdCompleter = Completer<void>();
+  Completer<void> _bannerHomeCompleter = Completer<void>();
+  Completer<void> _bannerListCompleter = Completer<void>();
+  Completer<void> _bannerMgmtCompleter = Completer<void>();
+
   String get _appOpenAdUnitId {
     if (kIsWeb) return '';
     return dotenv.env['GOOGLE_ADMOB_ID_ANDROID_APP_OPEN']!;
@@ -33,19 +40,35 @@ class AdService {
 
   // 모든 광고를 미리 로드합니다. (스플래시 화면에서 호출)
   Future<void> preloadAds() async {
+    // Completer 초기화
+    _appOpenAdCompleter = Completer<void>();
+    _bannerHomeCompleter = Completer<void>();
+    _bannerListCompleter = Completer<void>();
+    _bannerMgmtCompleter = Completer<void>();
+
+    // await 없이 로드 "시작"
+    _loadAppOpenAd();
+    _loadBannerAdHome();
+    _loadBannerAdList();
+    _loadBannerAdMgmt();
+
     // 병렬로 로드
     await Future.wait([
-      _loadAppOpenAd(),
-      _loadBannerAdHome(),
-      _loadBannerAdList(),
-      _loadBannerAdMgmt(),
+      _appOpenAdCompleter.future,
+      _bannerHomeCompleter.future,
+      _bannerListCompleter.future,
+      _bannerMgmtCompleter.future,
     ]);
   }
 
   // --- 앱 오프닝 광고 (App Open) ---
   Future<void> _loadAppOpenAd() async {
-    if (kIsWeb) return;
-    await AppOpenAd.load(
+    if (kIsWeb) {
+      _appOpenAdCompleter.complete(); // 웹이면 즉시 완료
+      return;
+    }
+
+    AppOpenAd.load(
       adUnitId: _appOpenAdUnitId,
       request: const AdRequest(),
       adLoadCallback: AppOpenAdLoadCallback(
@@ -53,18 +76,18 @@ class AdService {
           _appOpenAd = ad;
           _isAppOpenAdLoaded = true;
           logger.i('AppOpenAd loaded.');
+          _appOpenAdCompleter.complete(); // 로드 성공 시 complete
         },
         onAdFailedToLoad: (error) {
           _isAppOpenAdLoaded = false;
           logger.e('AppOpenAd failed to load: $error');
+          _appOpenAdCompleter.complete(); // 로드 실패 시에도 complete
         },
       ),
     );
   }
 
   void showAppOpenAdIfAvailable({required VoidCallback onAdDismissed}) {
-    logger.i('_isAppOpenAdLoaded: ${!_isAppOpenAdLoaded}');
-    logger.i('_appOpenAd is null: ${_appOpenAd == null ? 'true' : 'false'}');
     if (_isAppOpenAdShowing || !_isAppOpenAdLoaded || _appOpenAd == null) {
       logger.w('AppOpenAd not available or already showing.');
       onAdDismissed();
@@ -105,10 +128,14 @@ class AdService {
       request: const AdRequest(),
       size: AdSize.banner,
       listener: BannerAdListener(
-        onAdLoaded: (ad) => logger.i('Banner Home loaded.'),
+        onAdLoaded: (ad) {
+          logger.i('Banner Home loaded.');
+          _bannerHomeCompleter.complete(); // 로드 성공 시 complete
+        },
         onAdFailedToLoad: (ad, err) {
           logger.e('Banner Home failed: $err');
           ad.dispose();
+          _bannerHomeCompleter.complete(); // 로드 실패 시에도 complete
         },
       ),
     )..load();
@@ -121,10 +148,14 @@ class AdService {
       request: const AdRequest(),
       size: AdSize.banner,
       listener: BannerAdListener(
-        onAdLoaded: (ad) => logger.i('Banner List loaded.'),
+        onAdLoaded: (ad) {
+          logger.i('Banner List loaded.');
+          _bannerListCompleter.complete(); // 로드 성공 시 complete
+        },
         onAdFailedToLoad: (ad, err) {
           logger.e('Banner List failed: $err');
           ad.dispose();
+          _bannerListCompleter.complete(); // 로드 실패 시에도 complete
         },
       ),
     )..load();
@@ -137,10 +168,14 @@ class AdService {
       request: const AdRequest(),
       size: AdSize.banner,
       listener: BannerAdListener(
-        onAdLoaded: (ad) => logger.i('Banner Mgmt loaded.'),
+        onAdLoaded: (ad) {
+          logger.i('Banner Mgmt loaded.');
+          _bannerMgmtCompleter.complete(); // 로드 성공 시 complete
+        },
         onAdFailedToLoad: (ad, err) {
           logger.e('Banner Mgmt failed: $err');
           ad.dispose();
+          _bannerMgmtCompleter.complete(); // 로드 실패 시에도 complete
         },
       ),
     )..load();

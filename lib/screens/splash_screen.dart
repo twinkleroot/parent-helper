@@ -12,7 +12,6 @@ class SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<SplashScreen> {
-  bool _adsLoaded = false;
 
   @override
   void initState() {
@@ -25,26 +24,27 @@ class _SplashScreenState extends State<SplashScreen> {
       // 광고 서비스 가져오기 (listen: false)
       final adService = context.read<AdService>();
 
-      // 스플래시 화면이 최소 1.5초간 보이도록 보장
+      // 1. 광고 로드 "시작"
+      final adLoadFuture = adService.preloadAds();
+      // 2. 최소 스플래시 시간(1.5초) "시작"
+      final minSplashFuture = Future.delayed(const Duration(milliseconds: 1500));
+
+      // 3. [광고 로드 완료]와 [최소 1.5초 경과]를 "모두" 기다림
       await Future.wait([
-        adService.preloadAds(),
-        Future.delayed(const Duration(milliseconds: 1500)),
+        adLoadFuture,
+        minSplashFuture,
       ]);
 
-      // 광고 로드가 완료되었음을 표시
+      // _adsLoaded 상태 체크 제거 (이미 완료됨)
       if (mounted) {
-        setState(() {
-          _adsLoaded = true;
-        });
+        // 이 시점에는 1.5초가 지났고, 광고 로드도 완료(성공 또는 실패)됨.
+        // AdService가 로드 성공 여부(_isAppOpenAdLoaded)를 알고 있음.
+        adService.showAppOpenAdIfAvailable(
+          onAdDismissed: () {
+            _navigateToHome();
+          },
+        );
       }
-
-      // 앱 오프닝 광고 표시 시도
-      adService.showAppOpenAdIfAvailable(
-        // named parameter로 onAdDismissed 전달
-        onAdDismissed: () {
-          _navigateToHome();
-        },
-      );
     } catch (e) {
       logger.e('Error preloading ads: $e');
       // 광고 로드에 실패하더라도 홈으로 이동

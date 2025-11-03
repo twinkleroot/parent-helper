@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import '../models/schedule.dart';
@@ -69,6 +70,7 @@ class NotificationService {
         hour,
         minute,
         now,
+        leadTimeMinutes
       );
 
       // 리드 타임 적용
@@ -77,7 +79,7 @@ class NotificationService {
       // 알림 내용
       String title = '${schedule.childName} ${schedule.type == ScheduleType.pickup ? "픽업" : "하원"} 알림';
       String body =
-          '$leadTimeMinutes분 뒤 (${scheduledDate.hour.toString().padLeft(2, '0')}:${(scheduledDate.minute).toString().padLeft(2, '0')}) ${schedule.institutionName} 차량이 도착합니다.';
+          '$leadTimeMinutes분 뒤 (${scheduledDate.hour.toString().padLeft(2, '0')}:${(scheduledDate.minute).toString().padLeft(2, '0')}) ${schedule.institutionName} ${schedule.type == ScheduleType.pickup ? "픽업" : "하원"} 시간입니다.';
 
       // 주간 반복 알림 예약
       await flutterLocalNotificationsPlugin.zonedSchedule(
@@ -85,13 +87,15 @@ class NotificationService {
         title,
         body,
         scheduledDate,
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
             'pickup_channel_id',
             '등하원 알림',
             channelDescription: '등하원 차량 도착 알림 채널',
             importance: Importance.max,
             priority: Priority.high,
+            enableVibration: true, // 진동 활성화
+            vibrationPattern: Int64List.fromList([0, 500, 500, 500]), // 기본 진동 패턴
             sound: null,
             // sound: RawResourceAndroidNotificationSound('notification_sound'), // res/raw/notification_sound.wav
           ),
@@ -130,26 +134,31 @@ class NotificationService {
 
   // 다음 알림 시간 계산 헬퍼
   tz.TZDateTime _nextInstanceOfDayTime(
-      int dayOfWeek, int hour, int minute, tz.TZDateTime now) {
-    tz.TZDateTime scheduledDate = tz.TZDateTime(
-      tz.local,
-      now.year,
-      now.month,
-      now.day,
-      hour,
-      minute,
-    );
+      int dayOfWeek,
+      int hour,
+      int minute,
+      tz.TZDateTime now,
+      int leadTimeMinutes,
+    ) {
+    // 1. 오늘 날짜 + 요청 시간으로 기준 날짜 생성
+    tz.TZDateTime scheduleTime = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
 
-    // 이미 시간이 지났으면 다음 날로
-    if (scheduledDate.isBefore(now)) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    // 2. 요청 요일이 될 때까지 하루씩 더함
+    while (scheduleTime.weekday != dayOfWeek) {
+      scheduleTime = scheduleTime.add(const Duration(days: 1));
     }
 
-    // 해당 요일이 될 때까지 1일씩 추가
-    while (scheduledDate.weekday != dayOfWeek) {
-      scheduledDate = scheduledDate.add(const Duration(days: 1));
+    // 3. (중요) 계산된 시간이 이미 "현재"보다 과거인 경우, 다음 주로 넘김
+    //    (예: 월요일 10시에 월요일 10시 5분 알림(리드타임 10분)을 설정하면
+    //     실제 알림 시간은 9시 55분이므로 과거가 됨 -> 다음 주로 넘겨야 함)
+    //    리드 타임을 적용한 최종 시간을 기준으로 비교
+    final tz.TZDateTime finalNotificationTime = scheduleTime.subtract(Duration(minutes: leadTimeMinutes));
+    if (finalNotificationTime.isBefore(now)) {
+      scheduleTime = scheduleTime.add(const Duration(days: 7));
     }
 
-    return scheduledDate;
+    // 'zonedSchedule' 함수가 리드타임을 적용할 수 있도록
+    // 순수한 "다음 스케줄 시간 (리드타임 적용 전)"을 반환
+    return scheduleTime; // zonedSchedule 내부에서 리드타임을 빼도록 롤백
   }
 }

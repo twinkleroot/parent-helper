@@ -30,6 +30,21 @@ class AllSchedulesTab extends StatelessWidget {
 
           final schedules = snapshot.data!;
 
+          // 정렬 로직 추가
+          schedules.sort((a, b) {
+            // 1. 아이 이름 (1차 정렬)
+            int nameCompare = a.childName.compareTo(b.childName);
+            if (nameCompare != 0) {
+              return nameCompare;
+            }
+
+            // 2. 시간 (2차 정렬 - 오름차순)
+            // TimeOfDay를 비교 가능한 숫자(분)로 변환
+            double timeA = a.time.hour + (a.time.minute / 60.0);
+            double timeB = b.time.hour + (b.time.minute / 60.0);
+            return timeA.compareTo(timeB);
+          });
+
           return ListView.builder(
             itemCount: schedules.length,
             itemBuilder: (context, index) {
