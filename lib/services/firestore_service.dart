@@ -92,14 +92,54 @@ class FirestoreService {
 
   // 자녀 수정
   Future<void> updateChild(Child child) async {
-    if (uid == null) return;
-    await _childrenCollection.doc(child.id).update(child.toFirestore());
+    if (uid == null) throw Exception('User not logged in');
+
+    final WriteBatch batch = _db.batch();
+
+    // 1. 'children' 컬렉션의 자녀 정보 업데이트
+    final childRef = _db.collection('users').doc(uid).collection('children').doc(child.id);
+    batch.update(childRef, child.toFirestore());
+
+    // 2. 'schedules' 컬렉션에서 이 자녀 ID를 가진 모든 일정 쿼리
+    final schedulesRef = _db.collection('users').doc(uid).collection('schedules');
+    final querySnapshot = await schedulesRef.where('childId', isEqualTo: child.id).get();
+
+    // 3. 쿼리 결과(모든 관련 일정)의 'childName'을 새 이름으로 업데이트
+    for (final doc in querySnapshot.docs) {
+      batch.update(doc.reference, {'childName': child.name});
+    }
+
+    // 4. 모든 작업을 하나의 트랜잭션으로 실행
+    await batch.commit();
+
+    // await _childrenCollection.doc(child.id).update(child.toFirestore());
   }
 
-  // 자녀 삭제
+  // 자녀 삭제 시, 관련된 모든 일정(Schedule)도 함께 삭제
   Future<void> deleteChild(String childId) async {
-    if (uid == null) return;
-    await _childrenCollection.doc(childId).delete();
+    if (uid == null) throw Exception('User not logged in');
+
+    final WriteBatch batch = _db.batch();
+
+    // 1. 'children' 컬렉션의 자녀 정보 삭제
+    final childRef = _db.collection('users').doc(uid).collection('children').doc(childId);
+    batch.delete(childRef);
+
+    // 2. 'schedules' 컬렉션에서 이 자녀 ID를 가진 모든 일정 쿼리
+    final schedulesRef = _db.collection('users').doc(uid).collection('schedules');
+    final querySnapshot = await schedulesRef.where('childId', isEqualTo: childId).get();
+
+    // 3. 쿼리 결과(모든 관련 일정)를 삭제
+    // (참고: 이로 인해 예약된 알림은 삭제되지 않습니다.
+    //   계정 탈퇴 시의 cancelAllNotifications() 또는 앱 재설치 시 해결됩니다.)
+    for (final doc in querySnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // 4. 모든 작업을 하나의 트랜잭션으로 실행
+    await batch.commit();
+
+    // await _childrenCollection.doc(childId).delete();
   }
 
   // --- 기관 (Institution) CRUD ---
@@ -118,16 +158,54 @@ class FirestoreService {
     await _institutionsCollection.add(institution);
   }
 
-  // 기관 수정
+  // 기관 이름/정보 변경 시, 관련된 모든 일정(Schedule)의 'institutionName'도 함께 업데이트
   Future<void> updateInstitution(Institution institution) async {
-    if (uid == null) return;
-    await _institutionsCollection.doc(institution.id).update(institution.toFirestore());
+    if (uid == null) throw Exception('User not logged in');
+
+    // await _institutionsCollection.doc(institution.id).update(institution.toFirestore());
+
+    final WriteBatch batch = _db.batch();
+
+    // 1. 'institutions' 컬렉션의 기관 정보 업데이트
+    final instRef = _db.collection('users').doc(uid).collection('institutions').doc(institution.id);
+    batch.update(instRef, institution.toFirestore());
+
+    // 2. 'schedules' 컬렉션에서 이 기관 ID를 가진 모든 일정 쿼리
+    final schedulesRef = _db.collection('users').doc(uid).collection('schedules');
+    final querySnapshot = await schedulesRef.where('institutionId', isEqualTo: institution.id).get();
+
+    // 3. 쿼리 결과(모든 관련 일정)의 'institutionName'을 새 이름으로 업데이트
+    for (final doc in querySnapshot.docs) {
+      batch.update(doc.reference, {'institutionName': institution.name});
+    }
+
+    // 4. 모든 작업을 하나의 트랜잭션으로 실행
+    await batch.commit();
   }
 
-  // 기관 삭제
+  // 기관 삭제 시, 관련된 모든 일정(Schedule)도 함께 삭제
   Future<void> deleteInstitution(String institutionId) async {
-    if (uid == null) return;
-    await _institutionsCollection.doc(institutionId).delete();
+    if (uid == null) throw Exception('User not logged in');
+
+    // await _institutionsCollection.doc(institutionId).delete();
+
+    final WriteBatch batch = _db.batch();
+
+    // 1. 'institutions' 컬렉션의 기관 정보 삭제
+    final instRef = _db.collection('users').doc(uid).collection('institutions').doc(institutionId);
+    batch.delete(instRef);
+
+    // 2. 'schedules' 컬렉션에서 이 기관 ID를 가진 모든 일정 쿼리
+    final schedulesRef = _db.collection('users').doc(uid).collection('schedules');
+    final querySnapshot = await schedulesRef.where('institutionId', isEqualTo: institutionId).get();
+
+    // 3. 쿼리 결과(모든 관련 일정)를 삭제
+    for (final doc in querySnapshot.docs) {
+      batch.delete(doc.reference);
+    }
+
+    // 4. 모든 작업을 하나의 트랜잭션으로 실행
+    await batch.commit();
   }
 
   // --- 스케줄 (Schedule) CRUD ---

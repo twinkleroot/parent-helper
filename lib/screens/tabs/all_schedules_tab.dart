@@ -18,12 +18,13 @@ class AllSchedulesTab extends StatefulWidget {
 class _AllSchedulesTabState extends State<AllSchedulesTab> {
   String? _selectedChildId;
   String? _selectedInstitutionId;
+  ScheduleType? _selectedType; // 등/하원 필터 상태 변수 추가
 
   @override
   Widget build(BuildContext context) {
     final firestoreService = Provider.of<FirestoreService>(context);
 
-    return Stack(
+    return Column(
       children: [
         // 필터 영역
         _buildFilterBar(firestoreService),
@@ -52,7 +53,8 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
                     schedule.childId == _selectedChildId;
                 final matchInstitution = _selectedInstitutionId == null ||
                     schedule.institutionId == _selectedInstitutionId;
-                return matchChild && matchInstitution;
+                final matchType = _selectedType == null || schedule.type == _selectedType;
+                return matchChild && matchInstitution && matchType;
               }).toList();
 
               // 1순위: 시간, 2순위: 아이 이름 순으로 정렬
@@ -115,78 +117,111 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
 
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      child: Row(
+      child: Column(
         children: [
-          // 자녀 필터
-          Expanded(
-            child: StreamBuilder<List<Child>>(
-              stream: firestoreService.getChildren(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const SizedBox.shrink(); // 로딩 중 UI 생략
-                }
-                final children = snapshot.data!;
-
-                final List<DropdownMenuEntry<String?>> childEntries = [
-                  const DropdownMenuEntry<String?>(
-                    value: null,
-                    label: '모든 자녀',
-                  ),
-                  ...children.map((child) => DropdownMenuEntry<String?>(
-                    value: child.id,
-                    label: child.name,
-                  )),
-                ];
-
-                return DropdownMenu<String?>(
-                  inputDecorationTheme: roundedDropdownTheme,
-                  alignmentOffset: const Offset(0, 0),
-                  initialSelection: _selectedChildId,
-                  expandedInsets: EdgeInsets.zero,
-                  hintText: '자녀 선택',
-                  dropdownMenuEntries: childEntries,
-                  onSelected: (String? value) {
-                    setState(() => _selectedChildId = value);
-                  },
-                );
-              },
+          // 1. 등/하원 필터 (SegmentedButton) 추가
+          SegmentedButton<ScheduleType?>(
+            segments: const [
+              ButtonSegment<ScheduleType?>(
+                value: null, // '전체'
+                label: Text('전체'),
+                icon: Icon(Icons.clear_all),
+              ),
+              ButtonSegment<ScheduleType?>(
+                value: ScheduleType.pickup, // '등원/픽업'
+                label: Text('등원'),
+                icon: Icon(Icons.directions_car),
+              ),
+              ButtonSegment<ScheduleType?>(
+                value: ScheduleType.dropoff, // '하원'
+                label: Text('하원'),
+                icon: Icon(Icons.school),
+              ),
+            ],
+            selected: {_selectedType},
+            onSelectionChanged: (Set<ScheduleType?> newSelection) {
+              setState(() => _selectedType = newSelection.first);
+            },
+            // 꽉 차게 보이도록 스타일 조정
+            style: SegmentedButton.styleFrom(
+              visualDensity: VisualDensity.compact,
             ),
           ),
-          const SizedBox(width: 16),
-          // 기관 필터
-          Expanded(
-            child: StreamBuilder<List<Institution>>(
-              stream: firestoreService.getInstitutions(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const SizedBox.shrink();
-                }
-                final institutions = snapshot.data!;
+          const SizedBox(height: 12), // 필터 사이 간격
+          Row(
+            children: [
+              // 자녀 필터
+              Expanded(
+                child: StreamBuilder<List<Child>>(
+                  stream: firestoreService.getChildren(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const SizedBox.shrink(); // 로딩 중 UI 생략
+                    }
+                    final children = snapshot.data!;
 
-                final List<DropdownMenuEntry<String?>> instEntries = [
-                  const DropdownMenuEntry<String?>(
-                    value: null,
-                    label: '모든 기관',
-                  ),
-                  ...institutions.map((inst) => DropdownMenuEntry<String?>(
-                    value: inst.id,
-                    label: inst.name,
-                  )),
-                ];
+                    final List<DropdownMenuEntry<String?>> childEntries = [
+                      const DropdownMenuEntry<String?>(
+                        value: null,
+                        label: '모든 자녀',
+                      ),
+                      ...children.map((child) => DropdownMenuEntry<String?>(
+                        value: child.id,
+                        label: child.name,
+                      )),
+                    ];
 
-                return DropdownMenu<String?>(
-                  inputDecorationTheme: roundedDropdownTheme,
-                  alignmentOffset: const Offset(0, 60),
-                  initialSelection: _selectedInstitutionId,
-                  expandedInsets: EdgeInsets.zero,
-                  hintText: '기관 선택',
-                  dropdownMenuEntries: instEntries,
-                  onSelected: (String? value) {
-                    setState(() => _selectedInstitutionId = value);
+                    return DropdownMenu<String?>(
+                      inputDecorationTheme: roundedDropdownTheme,
+                      alignmentOffset: const Offset(0, 0),
+                      initialSelection: _selectedChildId,
+                      expandedInsets: EdgeInsets.zero,
+                      hintText: '자녀 선택',
+                      dropdownMenuEntries: childEntries,
+                      onSelected: (String? value) {
+                        setState(() => _selectedChildId = value);
+                      },
+                    );
                   },
-                );
-              },
-            ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              // 기관 필터
+              Expanded(
+                child: StreamBuilder<List<Institution>>(
+                  stream: firestoreService.getInstitutions(),
+                  builder: (context, snapshot) {
+                    if (!snapshot.hasData) {
+                      return const SizedBox.shrink();
+                    }
+                    final institutions = snapshot.data!;
+
+                    final List<DropdownMenuEntry<String?>> instEntries = [
+                      const DropdownMenuEntry<String?>(
+                        value: null,
+                        label: '모든 기관',
+                      ),
+                      ...institutions.map((inst) => DropdownMenuEntry<String?>(
+                        value: inst.id,
+                        label: inst.name,
+                      )),
+                    ];
+
+                    return DropdownMenu<String?>(
+                      inputDecorationTheme: roundedDropdownTheme,
+                      alignmentOffset: const Offset(0, 0),
+                      initialSelection: _selectedInstitutionId,
+                      expandedInsets: EdgeInsets.zero,
+                      hintText: '기관 선택',
+                      dropdownMenuEntries: instEntries,
+                      onSelected: (String? value) {
+                        setState(() => _selectedInstitutionId = value);
+                      },
+                    );
+                  },
+                ),
+              ),
+            ],
           ),
         ],
       ),

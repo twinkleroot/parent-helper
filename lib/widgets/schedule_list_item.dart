@@ -24,11 +24,25 @@ class ScheduleListItem extends StatelessWidget {
     return sortedDays.map((d) => dayMap[d] ?? '?').join(', ');
   }
 
+  // 추가: 메모 30자 제한 헬퍼 함수
+  String _truncateMemo(String memo) {
+    const maxLength = 30;
+    if (memo.length <= maxLength) {
+      return memo;
+    }
+    // 100자까지만 자르고 '...'를 붙입니다.
+    return '${memo.substring(0, maxLength)}...';
+  }
+
   @override
   Widget build(BuildContext context) {
     final timeFormat = DateFormat('a h:mm', 'ko_KR'); // 오후 3:00
     final formattedTime = timeFormat.format(DateTime(2023, 1, 1, schedule.time.hour, schedule.time.minute));
     final leadTime = schedule.notificationLeadTimeInMinutes;
+
+    final String memoText = schedule.memo.isNotEmpty
+        ? _truncateMemo(schedule.memo) // 100자 제한 적용
+        : '';
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -57,9 +71,31 @@ class ScheduleListItem extends StatelessWidget {
         ),
         // title, subtitle은 기존 로직 유지 (아이콘 정보 제거)
         title: Text('${schedule.childName} - ${schedule.institutionName}'),
-        subtitle: Text(
-            '매주 [${_formatDays(schedule.daysOfWeek)}] ($leadTime분 전 알림)\n${schedule.memo.isNotEmpty ? '메모: ${schedule.memo}' : ''}'),
-        // [수정] trailing에 스위치만 남김
+        subtitle: RichText(
+          text: TextSpan(
+            // 기본 스타일 (subtitle의 기본 스타일을 따름)
+            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant
+            ),
+            children: [
+              // 1. 일정 정보
+              TextSpan(
+                text: '매주 [${_formatDays(schedule.daysOfWeek)}]\n($leadTime분 전 알림)',
+              ),
+
+              // 2. 메모 정보 (메모가 있을 경우에만)
+              if (memoText.isNotEmpty)
+                TextSpan(
+                  text: '\n\n$memoText', // \n으로 줄바꿈
+                  style: TextStyle(
+                    // 약간 흐린 색상 + 이탤릭체
+                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
+                    fontStyle: FontStyle.italic,
+                  ),
+                ),
+            ],
+          ),
+        ),
         trailing: Switch(
           value: schedule.isEnabled,
           onChanged: (value) async {
