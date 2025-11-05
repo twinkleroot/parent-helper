@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
+import '../../services/auth_service.dart';
 import '../../services/firestore_service.dart';
+import '../../services/notification_service.dart';
 import '../../utils/logger.dart';
 
 class ManagementTab extends StatelessWidget {
@@ -89,8 +92,181 @@ class ManagementTab extends StatelessWidget {
           },
         ),
         _buildInstitutionList(firestoreService),
+
+        const SizedBox(height: 24),
+        const Divider(),
+        const SizedBox(height: 24),
+
+        // --- 섹션 제목 변경 ---
+        Text('알림 문제 해결', style: Theme.of(context).textTheme.titleLarge),
+        const SizedBox(height: 16),
+
+        // --- 배터리 최적화 안내 카드 ---
+        Card(
+          color: Theme.of(context).colorScheme.errorContainer,
+          child: ListTile(
+            leading: const Icon(Icons.battery_alert, color: Colors.white),
+            title: const Text('예약 알림이 울리지 않나요?'),
+            subtitle: const Text('삼성, 샤오미 등 일부 기기는 배터리 절전을 위해 알림을 차단할 수 있습니다. 여기를 탭하여 설정을 변경하세요.'),
+            onTap: () {
+              // 1. 사용자에게 왜 이 설정이 필요한지 설명
+              showDialog(
+                context: context,
+                builder: (ctx) => AlertDialog(
+                  title: const Text('알림이 오지 않는 경우'),
+                  content: const SingleChildScrollView(
+                    child: Text(
+                      '안정적인 알림을 위해, OS의 "배터리 최적화" 설정 변경이 필요합니다.\n\n'
+                          '1. "설정으로 이동" 버튼을 누르세요.\n'
+                          '2. [배터리] 항목을 선택하세요.\n'
+                          '3. [제한 없음] 또는 [최적화 안 함]으로 변경해주세요.\n\n'
+                          '(삼성 기기는 [배터리] -> [절전 예외 앱] 목록에 이 앱을 추가해야 할 수도 있습니다.)',
+                    ),
+                  ),
+                  actions: [
+                    TextButton(
+                      child: const Text('닫기'),
+                      onPressed: () => Navigator.of(ctx).pop(),
+                    ),
+                    ElevatedButton(
+                      child: const Text('설정으로 이동'),
+                      onPressed: () {
+                        // 2. 앱 설정 페이지로 이동
+                        openAppSettings();
+                        Navigator.of(ctx).pop();
+                      },
+                    ),
+                  ],
+                ),
+              );
+            },
+          ),
+        ),
+
+        const SizedBox(height: 16),
+        const Divider(),
+        const SizedBox(height: 16),
+
+        // 계정 탈퇴 섹션 추가
+        _buildAccountDeletionSection(context),
       ],
     );
+  }
+
+  // 계정 탈퇴 UI 및 로직
+  Widget _buildAccountDeletionSection(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '계정 관리',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+        ListTile(
+          title: const Text('계정 탈퇴'),
+          subtitle: const Text('모든 일정과 데이터를 삭제하고 계정에서 탈퇴합니다.'),
+          leading: const Icon(Icons.delete_forever, color: Colors.red),
+          onTap: () {
+            _showAccountDeletionConfirmation(context);
+          },
+        ),
+      ],
+    );
+  }
+
+  void _showAccountDeletionConfirmation(BuildContext context) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('계정 탈퇴'),
+        content: const Text(
+          '정말로 계정을 탈퇴하시겠습니까?\n'
+          '모든 자녀, 기관, 일정 정보가 **영구적으로 삭제**되며 복구할 수 없습니다.\n'
+          '이 작업을 계속하려면 Google 로그인을 다시 해야 할 수 있습니다.',
+          style: TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('취소'),
+            onPressed: () => Navigator.of(ctx).pop(false),
+          ),
+          TextButton(
+            child: const Text('계정 탈퇴', style: TextStyle(color: Colors.red)),
+            onPressed: () {
+              Navigator.of(ctx).pop(true); // 확인
+            },
+          ),
+        ],
+      ),
+    ).then((confirmed) {
+      if (confirmed == true) {
+        // 사용자가 '계정 탈퇴'를 확인했을 때
+        _deleteUserAccount(context);
+      }
+    });
+  }
+
+  // 계정 삭제 프로세스 실행
+  Future<void> _deleteUserAccount(BuildContext context) async {
+    // context가 파괴되기 전에 Navigator와 Messenger를 미리 저장합니다.
+    final navigator = Navigator.of(context, rootNavigator: true);
+    final scaffoldMessenger = ScaffoldMessenger.of(context);
+
+    // 로딩 다이얼로그 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Dialog(
+        child: Padding(
+          padding: EdgeInsets.all(20.0),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text('계정 삭제 중...'),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    try {
+      // 모든 서비스 가져오기
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      final notificationService = Provider.of<NotificationService>(context, listen: false);
+
+      // 1. 모든 예약된 알림 취소
+      await notificationService.cancelAllNotifications();
+      logger.i('모든 알림이 취소되었습니다.');
+
+      // 2. 모든 Firestore 데이터 삭제
+      await firestoreService.deleteAllUserData();
+      logger.i('모든 Firestore 데이터가 삭제되었습니다.');
+
+      // 3. Firebase Auth 계정 삭제 (재인증 포함)
+      final bool deleted = await authService.deleteAccount();
+
+      if (navigator.mounted) navigator.pop();
+
+      if (deleted) {
+        logger.i('계정 삭제가 성공적으로 완료되었습니다.');
+        // AuthGate가 이 시점 이후에 리빌드되며 자동으로 로그인 화면으로 이동시킵니다.
+      } else {
+        logger.w('사용자 재인증 취소 등으로 계정 삭제가 완료되지 않았습니다.');
+      }
+    } catch (e) {
+      logger.e('계정 삭제 프로세스 중 오류 발생: $e');
+      // 오류 발생 시에도 미리 저장된 navigator로 로딩 다이얼로그를 닫습니다.
+      if (navigator.mounted) navigator.pop();
+
+      // 미리 저장된 scaffoldMessenger로 오류 메시지를 표시합니다.
+      scaffoldMessenger.showSnackBar(
+        SnackBar(content: Text('계정 삭제 중 오류가 발생했습니다: $e')),
+      );
+    }
   }
 
   Widget _buildSectionHeader(BuildContext context, {required String title, required VoidCallback onAdd}) {

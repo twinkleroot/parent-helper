@@ -1,80 +1,196 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../models/child.dart';
+import '../../models/institution.dart';
 import '../../models/schedule.dart';
 import '../../services/firestore_service.dart';
-import '../../screens/add_edit_schedule_screen.dart';
-import '../../widgets/schedule_list_item.dart'; // 위젯 (생략)
+import '../../widgets/schedule_list_item.dart';
+import '../add_edit_schedule_screen.dart';
 
-class AllSchedulesTab extends StatelessWidget {
+// StatefulWidget으로 변경 (필터 상태 관리를 위해)
+class AllSchedulesTab extends StatefulWidget {
   const AllSchedulesTab({super.key});
+
+  @override
+  State<AllSchedulesTab> createState() => _AllSchedulesTabState();
+}
+
+class _AllSchedulesTabState extends State<AllSchedulesTab> {
+  String? _selectedChildId;
+  String? _selectedInstitutionId;
 
   @override
   Widget build(BuildContext context) {
     final firestoreService = Provider.of<FirestoreService>(context);
 
-    return Scaffold(
-      body: StreamBuilder<List<Schedule>>(
-        stream: firestoreService.getSchedules(),
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
-          if (!snapshot.hasData || snapshot.data!.isEmpty) {
-            return const Center(
-              child: Text(
-                '등록된 일정이 없습니다.\n하단의 + 버튼으로 일정을 추가하세요.',
-                textAlign: TextAlign.center,
-              ),
-            );
-          }
+    return Stack(
+      children: [
+        // 필터 영역
+        _buildFilterBar(firestoreService),
+        // 리스트 영역
+        Expanded(
+          child: StreamBuilder<List<Schedule>>(
+            stream: firestoreService.getSchedules(),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+                return const Center(
+                  child: Text(
+                    '등록된 일정이 없습니다.\n[설정] 탭에서 자녀와 기관을 먼저 등록해주세요.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 16, height: 1.5),
+                  ),
+                );
+              }
+              final schedules = snapshot.data!;
 
-          final schedules = snapshot.data!;
+              // 필터링 로직 적용
+              final filteredSchedules = schedules.where((schedule) {
+                final matchChild = _selectedChildId == null ||
+                    schedule.childId == _selectedChildId;
+                final matchInstitution = _selectedInstitutionId == null ||
+                    schedule.institutionId == _selectedInstitutionId;
+                return matchChild && matchInstitution;
+              }).toList();
 
-          // 정렬 로직 추가
-          schedules.sort((a, b) {
-            // 1. 아이 이름 (1차 정렬)
-            int nameCompare = a.childName.compareTo(b.childName);
-            if (nameCompare != 0) {
-              return nameCompare;
-            }
+              // 1순위: 시간, 2순위: 아이 이름 순으로 정렬
+              filteredSchedules.sort((a, b) {
+                int timeA = a.time.hour * 60 + a.time.minute;
+                int timeB = b.time.hour * 60 + b.time.minute;
+                int timeCompare = timeA.compareTo(timeB);
 
-            // 2. 시간 (2차 정렬 - 오름차순)
-            // TimeOfDay를 비교 가능한 숫자(분)로 변환
-            double timeA = a.time.hour + (a.time.minute / 60.0);
-            double timeB = b.time.hour + (b.time.minute / 60.0);
-            return timeA.compareTo(timeB);
-          });
+                if (timeCompare != 0) {
+                  return timeCompare;
+                }
+                // 시간이 같으면 이름 순 (오름차순)
+                return a.childName.compareTo(b.childName);
+              });
 
-          return ListView.builder(
-            itemCount: schedules.length,
-            itemBuilder: (context, index) {
-              final schedule = schedules[index];
-              return ScheduleListItem(
-                schedule: schedule,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => AddEditScheduleScreen(scheduleToEdit: schedule),
-                    ),
+              if (filteredSchedules.isEmpty) {
+                return const Center(
+                  child: Text(
+                    '필터 조건에 맞는 일정이 없습니다.',
+                    style: TextStyle(fontSize: 16),
+                  ),
+                );
+              }
+
+              return ListView.builder(
+                itemCount: filteredSchedules.length,
+                itemBuilder: (context, index) {
+                  final schedule = filteredSchedules[index];
+                  return ScheduleListItem(
+                    schedule: schedule,
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (context) => AddEditScheduleScreen(
+                            scheduleToEdit: schedule,
+                          ),
+                        ),
+                      );
+                    },
                   );
                 },
               );
             },
-          );
-        },
+          ),
+        ),
+      ],
+    );
+  }
+
+  // 필터 바 위젯
+  Widget _buildFilterBar(FirestoreService firestoreService) {
+    // 둥근 모서리 테마 정의
+    final roundedDropdownTheme = InputDecorationTheme(
+      border: OutlineInputBorder(
+        borderRadius: BorderRadius.circular(12.0),
       ),
-      floatingActionButton: FloatingActionButton(
-        child: const Icon(Icons.add),
-        onPressed: () {
-          // 새 스케줄 등록 화면으로 이동
-          Navigator.of(context).push(
-            MaterialPageRoute(
-              builder: (context) => const AddEditScheduleScreen(),
+      contentPadding:
+      const EdgeInsets.symmetric(horizontal: 12.0, vertical: 15.0),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+      child: Row(
+        children: [
+          // 자녀 필터
+          Expanded(
+            child: StreamBuilder<List<Child>>(
+              stream: firestoreService.getChildren(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const SizedBox.shrink(); // 로딩 중 UI 생략
+                }
+                final children = snapshot.data!;
+
+                final List<DropdownMenuEntry<String?>> childEntries = [
+                  const DropdownMenuEntry<String?>(
+                    value: null,
+                    label: '모든 자녀',
+                  ),
+                  ...children.map((child) => DropdownMenuEntry<String?>(
+                    value: child.id,
+                    label: child.name,
+                  )),
+                ];
+
+                return DropdownMenu<String?>(
+                  inputDecorationTheme: roundedDropdownTheme,
+                  alignmentOffset: const Offset(0, 0),
+                  initialSelection: _selectedChildId,
+                  expandedInsets: EdgeInsets.zero,
+                  hintText: '자녀 선택',
+                  dropdownMenuEntries: childEntries,
+                  onSelected: (String? value) {
+                    setState(() => _selectedChildId = value);
+                  },
+                );
+              },
             ),
-          );
-        },
+          ),
+          const SizedBox(width: 16),
+          // 기관 필터
+          Expanded(
+            child: StreamBuilder<List<Institution>>(
+              stream: firestoreService.getInstitutions(),
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return const SizedBox.shrink();
+                }
+                final institutions = snapshot.data!;
+
+                final List<DropdownMenuEntry<String?>> instEntries = [
+                  const DropdownMenuEntry<String?>(
+                    value: null,
+                    label: '모든 기관',
+                  ),
+                  ...institutions.map((inst) => DropdownMenuEntry<String?>(
+                    value: inst.id,
+                    label: inst.name,
+                  )),
+                ];
+
+                return DropdownMenu<String?>(
+                  inputDecorationTheme: roundedDropdownTheme,
+                  alignmentOffset: const Offset(0, 60),
+                  initialSelection: _selectedInstitutionId,
+                  expandedInsets: EdgeInsets.zero,
+                  hintText: '기관 선택',
+                  dropdownMenuEntries: instEntries,
+                  onSelected: (String? value) {
+                    setState(() => _selectedInstitutionId = value);
+                  },
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 }
+

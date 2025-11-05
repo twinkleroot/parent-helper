@@ -4,6 +4,20 @@ import 'package:timezone/timezone.dart' as tz;
 import '../models/schedule.dart';
 import '../utils/logger.dart';
 
+// 채널 객체를 클래스 변수로 분리하여 정의
+final AndroidNotificationChannel highImportanceChannel =
+  AndroidNotificationChannel(
+    'pickup_channel_v6', // id (가장 중요)
+    '등하원 알림 (v6)', // name
+    description: '등하원 시간 알림 채널', // description
+    importance: Importance.max,
+    playSound: true,
+    sound: null,
+    enableVibration: true,
+    vibrationPattern: null,
+    audioAttributesUsage: AudioAttributesUsage.alarm,
+  );
+
 class NotificationService {
   final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
@@ -24,29 +38,39 @@ class NotificationService {
       iOS: initializationSettingsIOS,
     );
 
+    // 1. 안드로이드 플러그인 인스턴스 가져오기
+    final AndroidFlutterLocalNotificationsPlugin? androidPlugin =
+    flutterLocalNotificationsPlugin.resolvePlatformSpecificImplementation<
+        AndroidFlutterLocalNotificationsPlugin>();
+
+    // 2. OS에 고중요도 알림 채널을 명시적으로 생성
+    if (androidPlugin != null) {
+      await androidPlugin.createNotificationChannel(highImportanceChannel);
+    }
+
+    // 3. 플러그인 초기화
     await flutterLocalNotificationsPlugin.initialize(initializationSettings);
 
+    // 4. 권한 요청
     // Android 13+ (API 33) 알림 권한 요청 (팝업)
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestNotificationsPermission();
-
+    await androidPlugin?.requestNotificationsPermission();
     // Android 12+ (API 31) '정확한 알람' 특별 권한 요청 (설정 화면으로 이동)
-    // 이 권한이 없으면 exactAllowWhileIdle 모드가 실패합니다.
+    await androidPlugin?.requestExactAlarmsPermission();
+
+    // iOS 알림 권한 요청
     await flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>()
-        ?.requestExactAlarmsPermission();
-
-    // iOS 알림 권한 요청 (init에서 이미 true로 설정했지만, 명시적으로 재확인 가능)
-    await flutterLocalNotificationsPlugin
-        .resolvePlatformSpecificImplementation<IOSFlutterLocalNotificationsPlugin>()
+        IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(
-          alert: true,
-          badge: true,
-          sound: true,
-        );
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+  }
+
+  Future<void> cancelAllNotifications() async {
+    logger.w('🚫 예약된 모든 알림을 취소합니다.');
+    await flutterLocalNotificationsPlugin.cancelAll();
   }
 
   // 스케줄 객체를 기반으로 주간 반복 알림 예약
@@ -64,40 +88,51 @@ class NotificationService {
       // 알림 ID 생성 (스케줄 ID와 요일을 조합하여 고유하게 만듦)
       int notificationId = _generateNotificationId(schedule.id, day);
 
-      // 다음 알림 시간 계산
-      tz.TZDateTime scheduledDate = _nextInstanceOfDayTime(
+      tz.TZDateTime nextScheduleTime = _nextInstanceOfDayTime(
         day,
         hour,
         minute,
         now,
-        leadTimeMinutes
+        leadTimeMinutes,
       );
 
       // 리드 타임 적용
-      scheduledDate = scheduledDate.subtract(Duration(minutes: leadTimeMinutes));
+      tz.TZDateTime notificationTime = nextScheduleTime.subtract(Duration(minutes: leadTimeMinutes));
 
       // 알림 내용
       String title = '${schedule.childName} ${schedule.type == ScheduleType.pickup ? "픽업" : "하원"} 알림';
       String body =
-          '$leadTimeMinutes분 뒤 (${scheduledDate.hour.toString().padLeft(2, '0')}:${(scheduledDate.minute).toString().padLeft(2, '0')}) ${schedule.institutionName} ${schedule.type == ScheduleType.pickup ? "픽업" : "하원"} 시간입니다.';
+          '$leadTimeMinutes분 뒤 (${nextScheduleTime.hour.toString().padLeft(2, '0')}:${(nextScheduleTime.minute).toString().padLeft(2, '0')}) ${schedule.institutionName} ${schedule.type == ScheduleType.pickup ? "픽업" : "하원"} 시간입니다.';
+
+      logger.i(
+        '🔔 알림 예약 로그 --- \n'
+            '  - 스케줄: ${schedule.childName} (${schedule.id})\n'
+            '  - 기준 요일: $day (1:월, 7:일)\n'
+            '  - 현재 시간: $now\n'
+            '  - 하원/등원 시간 (계산됨): $nextScheduleTime\n'
+            '  - 알림 울릴 시간 (계산됨): $notificationTime\n'
+            '  - 알림 ID: $notificationId',
+      );
 
       // 주간 반복 알림 예약
       await flutterLocalNotificationsPlugin.zonedSchedule(
         notificationId,
         title,
         body,
-        scheduledDate,
+        notificationTime,
         NotificationDetails(
           android: AndroidNotificationDetails(
-            'pickup_channel_id',
-            '등하원 알림',
-            channelDescription: '등하원 차량 도착 알림 채널',
+            highImportanceChannel.id, // ID 일치
+            highImportanceChannel.name, // 이름 일치
+            channelDescription: highImportanceChannel.description,
             importance: Importance.max,
             priority: Priority.high,
-            enableVibration: true, // 진동 활성화
-            vibrationPattern: Int64List.fromList([0, 500, 500, 500]), // 기본 진동 패턴
-            sound: null,
-            // sound: RawResourceAndroidNotificationSound('notification_sound'), // res/raw/notification_sound.wav
+            sound: highImportanceChannel.sound,
+            playSound: highImportanceChannel.playSound,
+            enableVibration: highImportanceChannel.enableVibration,
+            vibrationPattern: highImportanceChannel.vibrationPattern,
+            category: AndroidNotificationCategory.alarm,
+            icon: '@mipmap/ic_launcher',
           ),
           iOS: DarwinNotificationDetails(
             sound: 'default',
@@ -115,6 +150,7 @@ class NotificationService {
 
   // 특정 스케줄에 연결된 모든 알림 취소
   Future<void> cancelNotificationsForSchedule(Schedule schedule) async {
+    logger.w('🚫 알림 취소: ${schedule.childName} (${schedule.id})');
     for (int day in schedule.daysOfWeek) {
       int notificationId = _generateNotificationId(schedule.id, day);
       try {
@@ -143,22 +179,25 @@ class NotificationService {
     // 1. 오늘 날짜 + 요청 시간으로 기준 날짜 생성
     tz.TZDateTime scheduleTime = tz.TZDateTime(tz.local, now.year, now.month, now.day, hour, minute);
 
-    // 2. 요청 요일이 될 때까지 하루씩 더함
+    // 2. 최종 알림이 울릴 시간 (리드타임 적용)
+    final tz.TZDateTime finalNotificationTime = scheduleTime.subtract(Duration(minutes: leadTimeMinutes));
+
+    if (scheduleTime.weekday == dayOfWeek && !finalNotificationTime.isBefore(now)) {
+      return scheduleTime;
+    }
+
+    // 4. (아닌 경우) 오늘 알림은 이미 지났거나, 오늘이 해당 요일이 아님
+    //    내일부터 시작하여, 다음 주기의 해당 요일을 찾음
+
+    // 4-1. 내일 날짜로 리셋
+    scheduleTime = scheduleTime.add(const Duration(days: 1));
+
+    // 4-2. 해당 요일이 될 때까지 하루씩 더함
     while (scheduleTime.weekday != dayOfWeek) {
       scheduleTime = scheduleTime.add(const Duration(days: 1));
     }
 
-    // 3. (중요) 계산된 시간이 이미 "현재"보다 과거인 경우, 다음 주로 넘김
-    //    (예: 월요일 10시에 월요일 10시 5분 알림(리드타임 10분)을 설정하면
-    //     실제 알림 시간은 9시 55분이므로 과거가 됨 -> 다음 주로 넘겨야 함)
-    //    리드 타임을 적용한 최종 시간을 기준으로 비교
-    final tz.TZDateTime finalNotificationTime = scheduleTime.subtract(Duration(minutes: leadTimeMinutes));
-    if (finalNotificationTime.isBefore(now)) {
-      scheduleTime = scheduleTime.add(const Duration(days: 7));
-    }
-
-    // 'zonedSchedule' 함수가 리드타임을 적용할 수 있도록
-    // 순수한 "다음 스케줄 시간 (리드타임 적용 전)"을 반환
-    return scheduleTime; // zonedSchedule 내부에서 리드타임을 빼도록 롤백
+    // 5. 다음 주기의 해당 요일/시간을 반환
+    return scheduleTime;
   }
 }

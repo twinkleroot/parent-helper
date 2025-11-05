@@ -111,16 +111,16 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
             notificationLeadTimeInMinutes: schedule.notificationLeadTimeInMinutes,
             isEnabled: schedule.isEnabled,
           );
-          await notificationService.scheduleWeeklyNotification(newScheduleWithId);
+          // 생성 시에도 isEnabled 체크
+          if (newScheduleWithId.isEnabled) {
+            await notificationService.scheduleWeeklyNotification(newScheduleWithId);
+          }
         } else {
           // --- 기존 스케줄 수정 ---
           // Firestore 업데이트
           await firestoreService.updateSchedule(schedule);
           // 기존 알림 모두 취소
           await notificationService.cancelNotificationsForSchedule(schedule);
-
-          // 1. 기존 알림 취소
-          // await notificationService.cancelNotificationsForSchedule(widget.scheduleToEdit!);
 
           // 새 정보로 알림 다시 예약
           if (schedule.isEnabled) {
@@ -156,6 +156,12 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
   Widget build(BuildContext context) {
     // Firestore에서 자녀 및 기관 목록 가져오기
     final firestoreService = Provider.of<FirestoreService>(context);
+
+    // 둥근 모서리 테마 정의
+    final roundedDropdownTheme = InputDecorationTheme(
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12.0)),
+      contentPadding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 15.0),
+    );
 
     return Scaffold(
       appBar: AppBar(
@@ -199,20 +205,36 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
               stream: firestoreService.getChildren(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const LinearProgressIndicator();
-                return DropdownButtonFormField<Child>(
-                  // ID 기반으로 매칭
-                  value: _selectedChild != null && snapshot.data!.any((c) => c.id == _selectedChild!.id)
-                      ? snapshot.data!.firstWhere((c) => c.id == _selectedChild!.id)
-                      : null,
-                  hint: const Text('자녀 선택'),
-                  items: snapshot.data!.map((child) {
-                    return DropdownMenuItem<Child>(
+                final children = snapshot.data!;
+                final List<DropdownMenuEntry<Child?>> childEntries =
+                children
+                    .map((child) => DropdownMenuEntry<Child?>(
                       value: child,
-                      child: Text(child.name),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setState(() => _selectedChild = value),
-                  validator: (value) => value == null ? '자녀를 선택하세요' : null,
+                      label: child.name,
+                    ))
+                    .toList();
+
+                // Stream에서 받아온 목록에서 현재 ID와 일치하는 객체를 찾음
+                Child? currentSelection;
+                if (_selectedChild != null &&
+                    children.any((c) => c.id == _selectedChild!.id)) {
+                  currentSelection = children
+                      .firstWhere((c) => c.id == _selectedChild!.id);
+                }
+
+                return DropdownMenu<Child?>(
+                  // 둥근 모서리 테마 적용
+                  inputDecorationTheme: roundedDropdownTheme,
+                  // 메뉴를 아래로 강제
+                  alignmentOffset: const Offset(0, 0),
+                  // 너비 채우기
+                  expandedInsets: EdgeInsets.zero,
+                  initialSelection: currentSelection,
+                  hintText: '자녀 선택',
+                  dropdownMenuEntries: childEntries,
+                  onSelected: (Child? value) {
+                    setState(() => _selectedChild = value);
+                  },
                 );
               },
             ),
@@ -222,20 +244,37 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
               stream: firestoreService.getInstitutions(),
               builder: (context, snapshot) {
                 if (!snapshot.hasData) return const LinearProgressIndicator();
-                return DropdownButtonFormField<Institution>(
-                  // ID 기반으로 매칭
-                  value: _selectedInstitution != null && snapshot.data!.any((i) => i.id == _selectedInstitution!.id)
-                      ? snapshot.data!.firstWhere((i) => i.id == _selectedInstitution!.id)
-                      : null,
-                  hint: const Text('기관 선택'),
-                  items: snapshot.data!.map((inst) {
-                    return DropdownMenuItem<Institution>(
-                      value: inst,
-                      child: Text(inst.name),
-                    );
-                  }).toList(),
-                  onChanged: (value) => setState(() => _selectedInstitution = value),
-                  validator: (value) => value == null ? '기관을 선택하세요' : null,
+                final institutions = snapshot.data!;
+                final List<DropdownMenuEntry<Institution?>> instEntries =
+                institutions
+                    .map((inst) => DropdownMenuEntry<Institution?>(
+                  value: inst,
+                  label: inst.name,
+                ))
+                    .toList();
+
+                // Stream에서 받아온 목록에서 현재 ID와 일치하는 객체를 찾음
+                Institution? currentSelection;
+                if (_selectedInstitution != null &&
+                    institutions
+                        .any((i) => i.id == _selectedInstitution!.id)) {
+                  currentSelection = institutions.firstWhere(
+                          (i) => i.id == _selectedInstitution!.id);
+                }
+
+                return DropdownMenu<Institution?>(
+                  // 둥근 모서리 테마 적용
+                  inputDecorationTheme: roundedDropdownTheme,
+                  // 메뉴를 아래로 강제
+                  alignmentOffset: const Offset(0, 0),
+                  // 너비 채우기
+                  expandedInsets: EdgeInsets.zero,
+                  initialSelection: currentSelection,
+                  hintText: '기관 선택',
+                  dropdownMenuEntries: instEntries,
+                  onSelected: (Institution? value) {
+                    setState(() => _selectedInstitution = value);
+                  },
                 );
               },
             ),
@@ -272,16 +311,23 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
             ),
             const SizedBox(height: 16),
             // 미리 알림 시간
-            DropdownButtonFormField<int>(
-              value: _leadTime,
-              decoration: const InputDecoration(labelText: '미리 알림'),
-              items: [5, 10, 15, 20, 30].map((min) {
-                return DropdownMenuItem<int>(
+            DropdownMenu<int>(
+              inputDecorationTheme: roundedDropdownTheme,
+              alignmentOffset: const Offset(0, 0),
+              expandedInsets: EdgeInsets.zero,
+              initialSelection: _leadTime,
+              // [수정] hintText 대신 label 사용 (InputDecorationTheme과 더 잘 맞음)
+              label: const Text('미리 알림'),
+              dropdownMenuEntries:
+              [5, 10, 15, 20, 30, 60].map((min) {
+                return DropdownMenuEntry<int>(
                   value: min,
-                  child: Text('$min 분 전'),
+                  label: '$min 분 전',
                 );
               }).toList(),
-              onChanged: (value) => setState(() => _leadTime = value ?? 10),
+              onSelected: (int? value) {
+                setState(() => _leadTime = value ?? 10);
+              },
             ),
             const SizedBox(height: 16),
             // 메모 필드

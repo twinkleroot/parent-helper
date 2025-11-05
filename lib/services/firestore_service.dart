@@ -2,11 +2,52 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/child.dart';
 import '../models/institution.dart';
 import '../models/schedule.dart';
+import '../utils/logger.dart';
 
 class FirestoreService {
   final String? uid;
-
   FirestoreService({this.uid});
+
+  final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // --- Helper for Deletion ---
+  // 컬렉션 내의 모든 문서를 삭제하는 헬퍼 함수
+  Future<void> _deleteCollection(CollectionReference collectionRef) async {
+    final QuerySnapshot snapshot = await collectionRef.get();
+    // [중요] 문서가 많은 경우를 대비해 WriteBatch 사용
+    final WriteBatch batch = _db.batch();
+    for (DocumentSnapshot doc in snapshot.docs) {
+      batch.delete(doc.reference);
+    }
+    await batch.commit();
+  }
+
+  // 계정 탈퇴 시 모든 사용자 데이터 삭제
+  Future<void> deleteAllUserData() async {
+    if (uid == null) {
+      logger.e('데이터 삭제 불가: UID가 null입니다.');
+      return;
+    }
+    logger.w('사용자($uid)의 모든 Firestore 데이터를 삭제합니다...');
+
+    // 삭제할 모든 하위 컬렉션 참조
+    final schedulesRef = _db.collection('users').doc(uid).collection('schedules');
+    final childrenRef = _db.collection('users').doc(uid).collection('children');
+    final institutionsRef = _db.collection('users').doc(uid).collection('institutions');
+
+    try {
+      // 모든 컬렉션의 문서 삭제를 병렬로 실행
+      await Future.wait([
+        _deleteCollection(schedulesRef),
+        _deleteCollection(childrenRef),
+        _deleteCollection(institutionsRef),
+      ]);
+      logger.i('사용자($uid)의 모든 Firestore 데이터 삭제 완료.');
+    } catch (e) {
+      logger.e('Firestore 데이터 삭제 중 오류 발생: $e');
+      // 오류가 발생해도 계정 삭제는 계속 진행해야 할 수 있으므로 rethrow하지 않음
+    }
+  }
 
   // 유저 컬렉션 참조
   CollectionReference get _usersCollection =>
@@ -90,17 +131,13 @@ class FirestoreService {
   }
 
   // --- 스케줄 (Schedule) CRUD ---
-
   // 스케줄 목록 실시간 스트림
   Stream<List<Schedule>> getSchedules() {
     if (uid == null) return Stream.value([]);
     // 참고: orderBy를 사용하려면 Firestore 콘솔에서 색인을 생성해야 할 수 있습니다.
     // 여기서는 클라이언트 측에서 정렬합니다.
     return _schedulesCollection.snapshots().map((snapshot) {
-      var schedules = snapshot.docs.map((doc) => doc.data()).toList();
-      // 시간순 정렬 (예시)
-      schedules.sort((a, b) => a.time.compareTo(b.time));
-      return schedules;
+      return snapshot.docs.map((doc) => doc.data()).toList();
     });
   }
 

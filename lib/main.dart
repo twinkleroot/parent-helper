@@ -48,11 +48,9 @@ void main() async {
   await notificationService.init();
 
   // 광고 서비스 생성
-  final adService = AdService();
-
   runApp(MyApp(
     notificationService: notificationService,
-    adService: adService,
+    adService: AdService(),
   ));
 }
 

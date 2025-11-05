@@ -4,6 +4,7 @@ import 'package:intl/intl.dart';
 import '../models/schedule.dart';
 import '../services/firestore_service.dart';
 import '../services/notification_service.dart';
+import '../utils/logger.dart';
 
 // 스케줄 목록에 표시될 카드 아이템
 class ScheduleListItem extends StatelessWidget {
@@ -36,51 +37,36 @@ class ScheduleListItem extends StatelessWidget {
         onLongPress: () {
           _showDeleteConfirmation(context, schedule);
         },
-        leading: CircleAvatar(
-          backgroundColor: schedule.type == ScheduleType.pickup
-              ? Colors.blue.shade100
-              : Colors.green.shade100,
-          child: Icon(
-            // ScheduleType enum 사용 및 아이콘 변경
-            schedule.type == ScheduleType.pickup
-                ? Icons.directions_car
-                : Icons.school,
-            color:
-            schedule.type == ScheduleType.pickup ? Colors.blue : Colors.green,
+        // leading에 아이콘 대신 시간을 표시
+        leading: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8.0),
+          width: 75, // 고정 폭을 주어 정렬
+          alignment: Alignment.center,
+          child: Text(
+            formattedTime,
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              // 등/하원 유형에 따라 색상 구분
+              color: schedule.type == ScheduleType.pickup
+                  ? Colors.blue.shade700
+                  : Colors.green.shade700,
+            ),
+            textAlign: TextAlign.center,
           ),
         ),
+        // title, subtitle은 기존 로직 유지 (아이콘 정보 제거)
         title: Text('${schedule.childName} - ${schedule.institutionName}'),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('매주 [${_formatDays(schedule.daysOfWeek)}] $formattedTime ($leadTime분 전 알림)'),
-            // 메모가 있을 경우에만 표시
-            if (schedule.memo.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.only(top: 4.0),
-                child: Text(
-                  '메모: ${schedule.memo}',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.8),
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-          ],
-        ),
-        isThreeLine: schedule.memo.isNotEmpty, // 메모가 있으면 3줄 모드 활성화
-
+        subtitle: Text(
+            '매주 [${_formatDays(schedule.daysOfWeek)}] ($leadTime분 전 알림)\n${schedule.memo.isNotEmpty ? '메모: ${schedule.memo}' : ''}'),
+        // [수정] trailing에 스위치만 남김
         trailing: Switch(
           value: schedule.isEnabled,
-          // 활성화/비활성화 로직 연결
           onChanged: (value) async {
             final firestoreService = context.read<FirestoreService>();
-            final notificationService = context.read<NotificationService>();
+            final notificationService =
+            context.read<NotificationService>();
 
-            // 1. Firestore 업데이트 (copyWith 대신 새 객체 생성)
-            // (사용자님이 주신 모델에는 copyWith가 없으므로 생성자를 사용합니다)
             final updatedSchedule = Schedule(
               id: schedule.id,
               childId: schedule.childId,
@@ -93,19 +79,30 @@ class ScheduleListItem extends StatelessWidget {
               notificationLeadTimeInMinutes:
               schedule.notificationLeadTimeInMinutes,
               memo: schedule.memo,
-              isEnabled: value, // <-- 변경된 값
+              isEnabled: value, // 변경된 값
             );
-            await firestoreService.updateSchedule(updatedSchedule);
 
-            // 2. 알림 업데이트
-            if (value) {
-              // 스위치를 켠 경우: 알림 다시 예약
-              // (서비스 내부에서 loop, title, body 처리)
-              await notificationService.scheduleWeeklyNotification(updatedSchedule);
-            } else {
-              // 스위치를 끈 경우: 예약된 알림 모두 취소
-              // (사용자님이 제공한 NotificationService의 메서드명으로 변경)
-              await notificationService.cancelNotificationsForSchedule(updatedSchedule);
+            try {
+              // 1. Firestore 업데이트
+              await firestoreService.updateSchedule(updatedSchedule);
+
+              // 2. 알림 업데이트
+              if (value) {
+                // 스위치를 켠 경우: 알림 다시 예약
+                await notificationService
+                    .scheduleWeeklyNotification(updatedSchedule);
+              } else {
+                // 스위치를 끈 경우: 예약된 알림 모두 취소
+                await notificationService
+                    .cancelNotificationsForSchedule(schedule);
+              }
+            } catch (e) {
+              logger.e('스케줄 활성화/비활성화 실패: $e');
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('오류 발생: $e')),
+                );
+              }
             }
           },
         ),
@@ -113,7 +110,7 @@ class ScheduleListItem extends StatelessWidget {
     );
   }
 
-  // [추가] 삭제 확인 다이얼로그 (이전 응답과 동일)
+  // 삭제 확인 다이얼로그 (이전 응답과 동일)
   void _showDeleteConfirmation(BuildContext context, Schedule schedule) {
     showDialog(
       context: context,
