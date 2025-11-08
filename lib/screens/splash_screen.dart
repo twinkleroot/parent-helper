@@ -114,13 +114,13 @@ class _SplashScreenState extends State<SplashScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.family_restroom, size: 80, color: Colors.limeAccent),
+            Icon(Icons.family_restroom, size: 80, color: Colors.amber),
             SizedBox(height: 20),
             Text('등하원 알리미',
                 style: TextStyle(
                     fontSize: 24,
                     fontWeight: FontWeight.bold,
-                    color: Colors.limeAccent)),
+                    color: Colors.amber)),
             SizedBox(height: 20),
             CircularProgressIndicator(),
           ],
