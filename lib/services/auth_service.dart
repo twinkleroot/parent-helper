@@ -2,10 +2,12 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import '../models/user.dart';
 import '../utils/logger.dart';
+import 'data_repository.dart';
 
 class AuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final GoogleSignIn _googleSignIn = GoogleSignIn.instance;
+  final DataRepository _dataRepository = DataRepository(); // Repository 인스턴스
 
   // AppUser 모델로 변환
   AppUser? _userFromFirebaseUser(User? user) {
@@ -49,14 +51,17 @@ class AuthService {
         idToken: idToken,
       );
 
-      // Firebase에 로그인 및 User 객체 반환
-      // 루틴 관리 앱의 경우 아래와 같이 로그인 진행.
-      // final userCredential = await _auth.signInWithCredential(credential);
-      // return userCredential.user;
-
       // 4. Firebase에 로그인
       UserCredential result = await _auth.signInWithCredential(credential);
       User? user = result.user;
+
+      // [추가] 로그인 성공 후 데이터 동기화 시도
+      if (user != null) {
+        logger.i('로그인 성공. 로컬 데이터 동기화 시작...');
+        await _dataRepository.syncLocalDataToFirestore(user.uid);
+        logger.i('동기화 완료.');
+      }
+
       return _userFromFirebaseUser(user);
 
     } catch (e) {

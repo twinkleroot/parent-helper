@@ -1,5 +1,6 @@
 import 'dart:async'; // Completer를 위해 import 추가
 import 'package:flutter/foundation.dart';
+import 'package:flutter/widgets.dart'; // WidgetsBinding을 위해 필요
 import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/logger.dart';
@@ -94,6 +95,14 @@ class AdService {
       return;
     }
 
+    // 앱이 포그라운드(Resumed) 상태인지 확인
+    // 백그라운드 상태에서 show()를 호출하면 "The ad can not be shown when app is not in foreground" 에러 발생
+    if (WidgetsBinding.instance.lifecycleState != AppLifecycleState.resumed) {
+      logger.w('앱이 백그라운드 상태이므로 전면 광고를 표시하지 않습니다.');
+      onAdDismissed(); // 광고를 건너뛰고 다음 화면으로 이동
+      return;
+    }
+
     _appOpenAd!.fullScreenContentCallback = FullScreenContentCallback(
       onAdShowedFullScreenContent: (ad) {
         _isAppOpenAdShowing = true;
@@ -162,7 +171,10 @@ class AdService {
   }
 
   Future<void> _loadBannerAdMgmt() async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      _bannerMgmtCompleter.complete(); // 로드 성공 시 complete
+      return;
+    }
     _bannerAdMgmt = BannerAd(
       adUnitId: _bannerUnitId,
       request: const AdRequest(),

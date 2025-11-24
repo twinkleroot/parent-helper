@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:parent_helper/services/data_repository.dart';
 import 'package:provider/provider.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
 import '../../models/schedule.dart';
-import '../../services/firestore_service.dart';
 import '../../widgets/schedule_list_item.dart';
 import '../add_edit_schedule_screen.dart';
 
@@ -22,7 +22,7 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = Provider.of<FirestoreService>(context);
+    final firestoreService = Provider.of<DataRepository>(context);
 
     return Column(
       children: [
@@ -31,7 +31,7 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
         // 리스트 영역
         Expanded(
           child: StreamBuilder<List<Schedule>>(
-            stream: firestoreService.getSchedules(),
+            stream: firestoreService.getAllSchedules(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -105,7 +105,7 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
   }
 
   // 필터 바 위젯
-  Widget _buildFilterBar(FirestoreService firestoreService) {
+  Widget _buildFilterBar(DataRepository firestoreService) {
     // 둥근 모서리 테마 정의
     final roundedDropdownTheme = InputDecorationTheme(
       border: OutlineInputBorder(

@@ -1,35 +1,38 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:permission_handler/permission_handler.dart' as permission_handler;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
 import '../../services/auth_service.dart';
-import '../../services/firestore_service.dart';
+import '../../services/data_repository.dart';
 import '../../services/notification_service.dart';
 import '../../utils/logger.dart';
+import '../../widgets/user_guide_dialog.dart';
 
 class ManagementTab extends StatelessWidget {
   const ManagementTab({super.key});
 
   // 전화번호 자동 포맷 헬퍼 (예: 010-1234-5678)
-  String _formatPhoneNumber(String phoneNumber) {
-    // 숫자만 추출
-    String digitsOnly = phoneNumber.replaceAll(RegExp(r'\D'), '');
-
-    if (digitsOnly.length == 11) { // 010-xxxx-xxxx
+  String _formatPhoneNumber(String phone) {
+    final digitsOnly = phone.replaceAll(RegExp(r'\D'), '');
+    if (digitsOnly.length == 11) {
       return '${digitsOnly.substring(0, 3)}-${digitsOnly.substring(3, 7)}-${digitsOnly.substring(7)}';
-    } else if (digitsOnly.length == 10) {
-      if (digitsOnly.startsWith('02')) { // 02-xxxx-xxxx
+    }
+    if (digitsOnly.length == 10) {
+      if (digitsOnly.startsWith('02')) {
         return '${digitsOnly.substring(0, 2)}-${digitsOnly.substring(2, 6)}-${digitsOnly.substring(6)}';
-      } else { // 031-xxx-xxxx 등
+      } else {
         return '${digitsOnly.substring(0, 3)}-${digitsOnly.substring(3, 6)}-${digitsOnly.substring(6)}';
       }
-    } else if (digitsOnly.length == 8) { // 1588-xxxx 등
-      return '${digitsOnly.substring(0, 4)}-${digitsOnly.substring(4)}';
     }
-    // 그 외는 원본 반환 (하이픈 등 제거된)
-    return digitsOnly;
+    if (digitsOnly.length == 9) {
+      if (digitsOnly.startsWith('02')) {
+        return '${digitsOnly.substring(0, 2)}-${digitsOnly.substring(2, 5)}-${digitsOnly.substring(5)}';
+      }
+    }
+    return phone;
   }
 
   // 전화를 거는 헬퍼 함수
@@ -64,7 +67,7 @@ class ManagementTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final firestoreService = Provider.of<DataRepository>(context, listen: false);
 
     return ListView(
       padding: const EdgeInsets.all(16.0),
@@ -78,7 +81,7 @@ class ManagementTab extends StatelessWidget {
             _showAddEditChildDialog(context, firestoreService, childToEdit: null);
           },
         ),
-        _buildChildList(firestoreService),
+        _buildChildList(context, firestoreService),
 
         const SizedBox(height: 24),
 
@@ -91,25 +94,44 @@ class ManagementTab extends StatelessWidget {
             _showAddEditInstitutionDialog(context, firestoreService, institutionToEdit: null);
           },
         ),
-        _buildInstitutionList(firestoreService),
+        _buildInstitutionList(context, firestoreService),
 
         const SizedBox(height: 24),
         const Divider(),
-        const SizedBox(height: 24),
+        const SizedBox(height: 16),
+
+        _buildAccountManagementSection(context),
+
+        const SizedBox(height: 16),
+        const Divider(),
+        const SizedBox(height: 16),
 
         // --- 섹션 제목 변경 ---
-        Text('알림 문제 해결', style: Theme.of(context).textTheme.titleLarge),
+        Text('앱 정보 및 설정', style: Theme.of(context).textTheme.titleLarge),
         const SizedBox(height: 16),
+
+        // 앱 사용 가이드 버튼
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.help_outline, color: Colors.orange),
+            title: const Text('앱 사용 가이드'),
+            subtitle: const Text('등하원 알리미 사용 방법을 다시 확인합니다.'),
+            onTap: () {
+              showDialog(
+                context: context,
+                builder: (ctx) => const UserGuideDialog(),
+              );
+            },
+          ),
+        ),
 
         // --- 배터리 최적화 안내 카드 ---
         Card(
-          color: Theme.of(context).colorScheme.errorContainer,
           child: ListTile(
-            leading: const Icon(Icons.battery_alert, color: Colors.white),
+            leading: const Icon(Icons.battery_alert, color: Colors.deepOrange),
             title: const Text('예약 알림이 울리지 않나요?'),
             subtitle: const Text('삼성, 샤오미 등 일부 기기는 배터리 절전을 위해 알림을 차단할 수 있습니다. 여기를 탭하여 설정을 변경하세요.'),
             onTap: () {
-              // 1. 사용자에게 왜 이 설정이 필요한지 설명
               showDialog(
                 context: context,
                 builder: (ctx) => AlertDialog(
@@ -119,8 +141,9 @@ class ManagementTab extends StatelessWidget {
                       '안정적인 알림을 위해, OS의 "배터리 최적화" 설정 변경이 필요합니다.\n\n'
                           '1. "설정으로 이동" 버튼을 누르세요.\n'
                           '2. [배터리] 항목을 선택하세요.\n'
-                          '3. [제한 없음] 또는 [최적화 안 함]으로 변경해주세요.\n\n'
-                          '(삼성 기기는 [배터리] -> [절전 예외 앱] 목록에 이 앱을 추가해야 할 수도 있습니다.)',
+                          '3. [백그라운드 사용 제한] 또는 [배터리 사용량 최적화]를 선택하세요.\n'
+                          '4. [등하원 알리미] 앱을 찾아 [제한 없음] 또는 [최적화 안 함]으로 변경해주세요.\n\n'
+                          '(삼성 기기는 [절전 예외 앱] 목록에 이 앱을 추가해야 할 수도 있습니다.)',
                     ),
                   ),
                   actions: [
@@ -131,8 +154,7 @@ class ManagementTab extends StatelessWidget {
                     ElevatedButton(
                       child: const Text('설정으로 이동'),
                       onPressed: () {
-                        // 2. 앱 설정 페이지로 이동
-                        openAppSettings();
+                        permission_handler.openAppSettings();
                         Navigator.of(ctx).pop();
                       },
                     ),
@@ -142,37 +164,156 @@ class ManagementTab extends StatelessWidget {
             },
           ),
         ),
-
-        const SizedBox(height: 16),
-        const Divider(),
-        const SizedBox(height: 16),
-
-        // 계정 탈퇴 섹션 추가
-        _buildAccountDeletionSection(context),
       ],
     );
   }
 
   // 계정 탈퇴 UI 및 로직
-  Widget _buildAccountDeletionSection(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          '계정 관리',
-          style: Theme.of(context).textTheme.titleLarge,
-        ),
-        const SizedBox(height: 8),
-        ListTile(
-          title: const Text('계정 탈퇴'),
-          subtitle: const Text('모든 일정과 데이터를 삭제하고 계정에서 탈퇴합니다.'),
-          leading: const Icon(Icons.delete_forever, color: Colors.red),
-          onTap: () {
-            _showAccountDeletionConfirmation(context);
-          },
-        ),
-      ],
+  Widget _buildAccountManagementSection(BuildContext context) {
+    return StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          final user = snapshot.data;
+          final isLogged = user != null;
+
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                '계정 관리',
+                style: Theme
+                    .of(context)
+                    .textTheme
+                    .titleLarge,
+              ),
+              const SizedBox(height: 8),
+              if (!isLogged)
+              // 1. 비로그인 상태: 계정 연동 유도
+                Card(
+                  color: Colors.indigo.shade50, // 강조 색상
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                    side: BorderSide(color: Colors.indigo.shade100, width: 1),
+                  ),
+                  child: ListTile(
+                    contentPadding: const EdgeInsets.all(16),
+                    leading: const CircleAvatar(
+                      backgroundColor: Colors.white,
+                      child: Icon(Icons.cloud_upload, color: Colors.indigo),
+                    ),
+                    title: const Text(
+                      '구글 계정 연동하고 데이터 백업하기',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: Colors.indigo,
+                      ),
+                    ),
+                    subtitle: const Padding(
+                      padding: EdgeInsets.only(top: 6.0),
+                      child: Text(
+                        '현재 데이터는 기기에만 저장되어 있습니다.\n앱 삭제나 기기 변경 시 데이터 유실을 방지하려면 계정을 연동해주세요.',
+                        style: TextStyle(fontSize: 13, height: 1.4),
+                      ),
+                    ),
+                    onTap: () => _handleLinkAccount(context),
+                  ),
+                )
+              else
+              // 2. 로그인 상태: 계정 정보 및 관리
+                Card(
+                  child: Column(
+                    children: [
+                      ListTile(
+                        leading: const Icon(
+                            Icons.account_circle, color: Colors.green),
+                        title: const Text('구글 계정 연동됨'),
+                        subtitle: Text(user.email ?? '이메일 정보 없음'),
+                        trailing: TextButton(
+                          onPressed: () => _handleSignOut(context),
+                          child: const Text(
+                              '로그아웃', style: TextStyle(color: Colors.grey)),
+                        ),
+                      ),
+                      const Divider(height: 1, indent: 16, endIndent: 16),
+                      ListTile(
+                        title: const Text('계정 탈퇴'),
+                        subtitle: const Text('모든 데이터(서버/로컬)를 삭제하고 탈퇴합니다.'),
+                        leading: const Icon(
+                            Icons.delete_forever, color: Colors.red),
+                        onTap: () => _showAccountDeletionConfirmation(context),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          );
+        },
     );
+  }
+
+  // 계정 연동 (로그인) 핸들러
+  Future<void> _handleLinkAccount(BuildContext context) async {
+    // 로딩 표시
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+    );
+
+    try {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      final dataRepository = Provider.of<DataRepository>(context, listen: false);
+
+      // 로그인 시도 (내부적으로 데이터 동기화 syncLocalDataToFirestore 실행됨)
+      final user = await authService.signInWithGoogle();
+
+      // 로딩 닫기
+      if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+
+      if (user != null) {
+        // 로그인 성공 시 Repository의 Auth 상태 갱신
+        // (DataRepository 내부에서 FirebaseAuth를 직접 감지하거나, 여기서 수동 갱신)
+        // DataRepository가 FirebaseAuth.instance.currentUser를 직접 쓰므로 자동 반영됨.
+
+        if (context.mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('계정이 연동되고 데이터가 안전하게 백업되었습니다.')),
+          );
+        }
+      } else {
+        // 로그인 취소 또는 실패
+      }
+    } catch (e) {
+      // 로딩 닫기
+      if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+      logger.e('계정 연동 실패: $e');
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('계정 연동 중 오류가 발생했습니다.')),
+        );
+      }
+    }
+  }
+
+  // 로그아웃 핸들러
+  Future<void> _handleSignOut(BuildContext context) async {
+    final bool confirm = await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('로그아웃'),
+        content: const Text('로그아웃 하시겠습니까?\n로그아웃 후에는 로컬(기기) 데이터만 사용됩니다.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('로그아웃')),
+        ],
+      ),
+    ) ?? false;
+
+    if (confirm && context.mounted) {
+      final authService = Provider.of<AuthService>(context, listen: false);
+      await authService.signOut();
+      // 로그아웃 후에는 자동으로 로컬 DB 모드로 전환됩니다 (DataRepository 로직)
+    }
   }
 
   void _showAccountDeletionConfirmation(BuildContext context) {
@@ -235,7 +376,7 @@ class ManagementTab extends StatelessWidget {
     try {
       // 모든 서비스 가져오기
       final authService = Provider.of<AuthService>(context, listen: false);
-      final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+      final firestoreService = Provider.of<DataRepository>(context, listen: false);
       final notificationService = Provider.of<NotificationService>(context, listen: false);
 
       // 1. 모든 예약된 알림 취소
@@ -273,7 +414,13 @@ class ManagementTab extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(title, style: Theme.of(context).textTheme.titleLarge),
+        Expanded(
+          child: Text(
+            title,
+            style: Theme.of(context).textTheme.titleLarge,
+            overflow: TextOverflow.ellipsis, // 공간이 부족하면 ... 처리
+          ),
+        ),
         IconButton(
           icon: const Icon(Icons.add_circle_outline),
           onPressed: onAdd,
@@ -284,7 +431,7 @@ class ManagementTab extends StatelessWidget {
   }
 
   // 자녀 목록
-  Widget _buildChildList(FirestoreService firestoreService) {
+  Widget _buildChildList(BuildContext context, DataRepository firestoreService) {
     return StreamBuilder<List<Child>>(
       stream: firestoreService.getChildren(),
       builder: (context, snapshot) {
@@ -324,7 +471,7 @@ class ManagementTab extends StatelessWidget {
   }
 
   // 기관 목록
-  Widget _buildInstitutionList(FirestoreService firestoreService) {
+  Widget _buildInstitutionList(BuildContext context, DataRepository firestoreService) {
     return StreamBuilder<List<Institution>>(
       stream: firestoreService.getInstitutions(),
       builder: (context, snapshot) {
@@ -361,11 +508,9 @@ class ManagementTab extends StatelessWidget {
                 trailing: inst.contactNumber.isNotEmpty
                     ? IconButton(
                         icon: const Icon(Icons.phone),
+                        // ListTile의 onTap과 분리되어 아이콘만 독립적으로 동작
+                        onPressed: () => _makePhoneCall(context, inst.contactNumber),
                         tooltip: '전화 걸기',
-                        onPressed: () {
-                          // ListTile의 onTap과 분리되어 아이콘만 독립적으로 동작
-                          _makePhoneCall(context, inst.contactNumber);
-                        },
                       )
                     : null, // 전화번호가 없으면 아이콘 숨김
               ),
@@ -377,7 +522,7 @@ class ManagementTab extends StatelessWidget {
   }
 
   // 1. 자녀 추가/수정 다이얼로그
-  void _showAddEditChildDialog(BuildContext context, FirestoreService firestoreService, {Child? childToEdit}) {
+  void _showAddEditChildDialog(BuildContext context, DataRepository firestoreService, {Child? childToEdit}) {
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController(text: childToEdit?.name ?? '');
     final bool isEditing = childToEdit != null;
@@ -416,7 +561,7 @@ class ManagementTab extends StatelessWidget {
                     await firestoreService.updateChild(updatedChild);
                   } else {
                     // 추가
-                    await firestoreService.addChild(Child(id: '', name: name));
+                    await firestoreService.addChild(name);
                   }
                   Navigator.of(ctx).pop();
                 }
@@ -429,7 +574,7 @@ class ManagementTab extends StatelessWidget {
   }
 
   // 2. 기관 추가/수정 다이얼로그
-  void _showAddEditInstitutionDialog(BuildContext context, FirestoreService firestoreService, {Institution? institutionToEdit}) {
+  void _showAddEditInstitutionDialog(BuildContext context, DataRepository firestoreService, {Institution? institutionToEdit}) {
     final formKey = GlobalKey<FormState>();
     final bool isEditing = institutionToEdit != null;
     final nameController = TextEditingController(text: institutionToEdit?.name ?? '');
@@ -484,11 +629,7 @@ class ManagementTab extends StatelessWidget {
                     ));
                   } else {
                     // 추가
-                    await firestoreService.addInstitution(Institution(
-                      id: '',
-                      name: name,
-                      contactNumber: contact,
-                    ));
+                    await firestoreService.addInstitution(name, contact);
                   }
                   Navigator.of(ctx).pop();
                 }

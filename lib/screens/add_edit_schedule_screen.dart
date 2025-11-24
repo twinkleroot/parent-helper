@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/schedule.dart';
 import '../models/child.dart';
 import '../models/institution.dart';
-import '../services/firestore_service.dart';
+import '../services/data_repository.dart';
 import '../services/notification_service.dart';
 import '../widgets/day_of_week_selector.dart'; // 위젯 (생략)
 import '../utils/logger.dart';
@@ -73,12 +73,11 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
     if (_formKey.currentState!.validate() && _selectedChild != null && _selectedInstitution != null && _daysOfWeek.isNotEmpty) {
       setState(() { _isLoading = true; });
 
-      final firestoreService = context.read<FirestoreService>();
+      final dataRepository = context.read<DataRepository>();
       final notificationService = context.read<NotificationService>();
 
       Schedule schedule = Schedule(
         id: widget.scheduleToEdit?.id ?? '', // ID가 비어있으면 Firestore가 생성
-        // id: widget.schedule?.id, // 수정 시 기존 ID 사용
         childId: _selectedChild!.id,
         childName: _selectedChild!.name,
         institutionId: _selectedInstitution!.id,
@@ -87,7 +86,6 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
         daysOfWeek: _daysOfWeek,
         time: _time,
         notificationLeadTimeInMinutes: _leadTime,
-        // isEnabled: _isEnabled,
         isEnabled: widget.scheduleToEdit?.isEnabled ?? true, // 기본값 true
         memo: _memoController.text.trim(),
       );
@@ -96,11 +94,11 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
         if (widget.scheduleToEdit == null) {
           // --- 생성 ---
           // 1. Firestore에 추가 (새 ID 반환받음)
-          final docRef = await firestoreService.addSchedule(schedule);
+          final String newScheduleId = await dataRepository.addSchedule(schedule);
 
           // 2. ID를 포함한 객체로 새 알림 예약
           Schedule newScheduleWithId = Schedule(
-            id: docRef.id, // Firestore에서 생성된 ID
+            id: newScheduleId,
             childId: schedule.childId,
             childName: schedule.childName,
             institutionId: schedule.institutionId,
@@ -118,7 +116,7 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
         } else {
           // --- 기존 스케줄 수정 ---
           // Firestore 업데이트
-          await firestoreService.updateSchedule(schedule);
+          await dataRepository.updateSchedule(schedule);
           // 기존 알림 모두 취소
           await notificationService.cancelNotificationsForSchedule(schedule);
 
@@ -155,7 +153,7 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
   @override
   Widget build(BuildContext context) {
     // Firestore에서 자녀 및 기관 목록 가져오기
-    final firestoreService = Provider.of<FirestoreService>(context);
+    final firestoreService = Provider.of<DataRepository>(context);
 
     // 둥근 모서리 테마 정의
     final roundedDropdownTheme = InputDecorationTheme(

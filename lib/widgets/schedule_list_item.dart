@@ -36,8 +36,12 @@ class ScheduleListItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final timeFormat = DateFormat('a h:mm', 'ko_KR'); // 오후 3:00
-    final formattedTime = timeFormat.format(DateTime(2023, 1, 1, schedule.time.hour, schedule.time.minute));
+    // 시간 포맷을 분리하기 위해 DateTime 객체 생성
+    final dt = DateTime(2023, 1, 1, schedule.time.hour, schedule.time.minute);
+    // 오전/오후
+    final amPm = DateFormat('a', 'ko_KR').format(dt);
+    // 10:40
+    final timeOnly = DateFormat('h:mm', 'ko_KR').format(dt);
     final leadTime = schedule.notificationLeadTimeInMinutes;
 
     final String memoText = schedule.memo.isNotEmpty
@@ -46,101 +50,141 @@ class ScheduleListItem extends StatelessWidget {
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: ListTile(
-        onTap: onTap,
-        onLongPress: () {
-          _showDeleteConfirmation(context, schedule);
-        },
-        // leading에 아이콘 대신 시간을 표시
-        leading: Container(
-          padding: const EdgeInsets.symmetric(vertical: 8.0),
-          width: 75, // 고정 폭을 주어 정렬
-          alignment: Alignment.center,
-          child: Text(
-            formattedTime,
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              // 등/하원 유형에 따라 색상 구분
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        // Card 자체에 패딩을 주어 내용이 잘리지 않도록 보호
+        padding: const EdgeInsets.symmetric(vertical: 8.0),
+        child: ListTile(
+          onTap: onTap,
+          onLongPress: () {
+            _showDeleteConfirmation(context, schedule);
+          },
+          // 시간을 2줄로 명확하게 고정하여 표시
+          leading: Container(
+            width: 60, // 너비 고정
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
               color: schedule.type == ScheduleType.pickup
-                  ? Colors.blue.shade700
-                  : Colors.green.shade700,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ),
-        // title, subtitle은 기존 로직 유지 (아이콘 정보 제거)
-        title: Text('${schedule.childName} - ${schedule.institutionName}'),
-        subtitle: RichText(
-          text: TextSpan(
-            // 기본 스타일 (subtitle의 기본 스타일을 따름)
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                color: Theme.of(context).colorScheme.onSurfaceVariant
-            ),
-            children: [
-              // 1. 일정 정보
-              TextSpan(
-                text: '매주 [${_formatDays(schedule.daysOfWeek)}]\n($leadTime분 전 알림)',
+                  ? Colors.blue.shade50
+                  : Colors.green.shade50,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: schedule.type == ScheduleType.pickup
+                    ? Colors.blue.shade200
+                    : Colors.green.shade200,
               ),
-
-              // 2. 메모 정보 (메모가 있을 경우에만)
-              if (memoText.isNotEmpty)
-                TextSpan(
-                  text: '\n\n$memoText', // \n으로 줄바꿈
+            ),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  amPm, // "오전" 또는 "오후"
                   style: TextStyle(
-                    // 약간 흐린 색상 + 이탤릭체
-                    color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.8),
-                    fontStyle: FontStyle.italic,
+                    fontSize: 12,
+                    color: Colors.grey.shade700,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
-            ],
+                Text(
+                  timeOnly, // "10:40"
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: schedule.type == ScheduleType.pickup
+                        ? Colors.blue.shade800
+                        : Colors.green.shade800,
+                    height: 1.1, // 줄 간격 조절
+                  ),
+                ),
+              ],
+            ),
           ),
-        ),
-        trailing: Switch(
-          value: schedule.isEnabled,
-          onChanged: (value) async {
-            final firestoreService = context.read<FirestoreService>();
-            final notificationService =
-            context.read<NotificationService>();
+          // 내용이 길어져도 잘리지 않도록 설정
+          title: Padding(
+            padding: const EdgeInsets.only(bottom: 4.0),
+            child: Text(
+              '${schedule.childName} - ${schedule.institutionName}',
+              style: const TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
 
-            final updatedSchedule = Schedule(
-              id: schedule.id,
-              childId: schedule.childId,
-              childName: schedule.childName,
-              institutionId: schedule.institutionId,
-              institutionName: schedule.institutionName,
-              type: schedule.type,
-              daysOfWeek: schedule.daysOfWeek,
-              time: schedule.time,
-              notificationLeadTimeInMinutes:
-              schedule.notificationLeadTimeInMinutes,
-              memo: schedule.memo,
-              isEnabled: value, // 변경된 값
-            );
+          subtitle: RichText(
+            text: TextSpan(
+              // 기본 스타일 (subtitle의 기본 스타일을 따름)
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                color: Theme.of(context).colorScheme.onSurfaceVariant,
+                height: 1.3, // 줄 간격 확보
+              ),
+              children: [
+                // 1. 일정 정보
+                TextSpan(
+                  text: '매주 [${_formatDays(schedule.daysOfWeek)}] ($leadTime분 전 알림)',
+                ),
 
-            try {
-              // 1. Firestore 업데이트
-              await firestoreService.updateSchedule(updatedSchedule);
+                // 2. 메모 정보 (메모가 있을 경우에만)
+                if (memoText.isNotEmpty)
+                  TextSpan(
+                    text: '\n$memoText', // \n으로 줄바꿈
+                    style: TextStyle(
+                      // 약간 흐린 색상 + 이탤릭체
+                      color: Theme.of(context).colorScheme.onSurfaceVariant.withOpacity(0.7),
+                      fontStyle: FontStyle.italic,
+                      fontSize: 13,
+                    ),
+                  ),
+              ],
+            ),
+          ),
 
-              // 2. 알림 업데이트
-              if (value) {
-                // 스위치를 켠 경우: 알림 다시 예약
-                await notificationService
-                    .scheduleWeeklyNotification(updatedSchedule);
-              } else {
-                // 스위치를 끈 경우: 예약된 알림 모두 취소
-                await notificationService
-                    .cancelNotificationsForSchedule(schedule);
-              }
-            } catch (e) {
-              logger.e('스케줄 활성화/비활성화 실패: $e');
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('오류 발생: $e')),
+          trailing: Transform.scale(
+            scale: 0.9,
+            child: Switch(
+              value: schedule.isEnabled,
+              onChanged: (value) async {
+                final firestoreService = context.read<FirestoreService>();
+                final notificationService = context.read<NotificationService>();
+
+                final updatedSchedule = Schedule(
+                  id: schedule.id,
+                  childId: schedule.childId,
+                  childName: schedule.childName,
+                  institutionId: schedule.institutionId,
+                  institutionName: schedule.institutionName,
+                  type: schedule.type,
+                  daysOfWeek: schedule.daysOfWeek,
+                  time: schedule.time,
+                  notificationLeadTimeInMinutes:
+                  schedule.notificationLeadTimeInMinutes,
+                  memo: schedule.memo,
+                  isEnabled: value,
                 );
-              }
-            }
-          },
+
+                try {
+                  await firestoreService.updateSchedule(updatedSchedule);
+                  if (value) {
+                    await notificationService
+                        .scheduleWeeklyNotification(updatedSchedule);
+                  } else {
+                    await notificationService
+                        .cancelNotificationsForSchedule(schedule);
+                  }
+                } catch (e) {
+                  logger.e('스케줄 토글 오류: $e');
+                }
+              },
+            ),
+          ),
+          // isThreeLine을 true로 주어 텍스트 공간 확보 (메모가 없어도 넉넉하게)
+          isThreeLine: true,
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+          // 최소 세로 패딩 확보
+          minVerticalPadding: 12,
         ),
       ),
     );
@@ -172,12 +216,15 @@ class ScheduleListItem extends StatelessWidget {
                 // 2. 예약된 알림 취소
                 await notificationService.cancelNotificationsForSchedule(schedule);
 
-                Navigator.of(ctx).pop(); // 다이얼로그 닫기
+                if (context.mounted) Navigator.of(ctx).pop();
               } catch (e) {
-                Navigator.of(ctx).pop(); // 다이얼로그 닫기
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('삭제 중 오류 발생: $e')),
-                );
+                logger.e('삭제 중 오류 발생: $e');
+                if (context.mounted) {
+                  Navigator.of(ctx).pop();
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(content: Text('삭제 중 오류 발생: $e')),
+                  );
+                }
               }
             },
           ),

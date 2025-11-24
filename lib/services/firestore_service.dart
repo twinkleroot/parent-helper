@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import '../models/app_config.dart';
 import '../models/child.dart';
 import '../models/institution.dart';
 import '../models/schedule.dart';
@@ -9,6 +10,22 @@ class FirestoreService {
   FirestoreService({this.uid});
 
   final FirebaseFirestore _db = FirebaseFirestore.instance;
+
+  // 앱 설정(버전, 공지사항 등) 가져오기
+  // 'app_config' 컬렉션의 'common' 문서 하나를 사용한다고 가정합니다.
+  Future<AppConfig> getAppConfig() async {
+    try {
+      final doc = await _db.collection('app_config').doc('common').get();
+      if (doc.exists) {
+        return AppConfig.fromFirestore(doc);
+      }
+      // 문서가 없으면 기본값 반환
+      return AppConfig(latestVersion: '1.0.0', minVersion: '1.0.0');
+    } catch (e) {
+      logger.e('AppConfig 로드 실패: $e');
+      return AppConfig(latestVersion: '1.0.0', minVersion: '1.0.0');
+    }
+  }
 
   // --- Helper for Deletion ---
   // 컬렉션 내의 모든 문서를 삭제하는 헬퍼 함수
@@ -235,5 +252,18 @@ class FirestoreService {
   Future<void> deleteSchedule(String scheduleId) async {
     if (uid == null) return;
     await _schedulesCollection.doc(scheduleId).delete();
+  }
+
+  // 동기화를 위해 Ref를 반환하는 메서드들
+  Future<DocumentReference> addReturnRefChild(String name) {
+    if (uid == null) throw Exception('User not logged in');
+    final ref = _db.collection('users').doc(uid).collection('children');
+    return ref.add({'name': name});
+  }
+
+  Future<DocumentReference> addReturnRefInstitution(String name, String contactNumber) {
+    if (uid == null) throw Exception('User not logged in');
+    final ref = _db.collection('users').doc(uid).collection('institutions');
+    return ref.add({'name': name, 'contactNumber': contactNumber});
   }
 }

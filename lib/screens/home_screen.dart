@@ -1,14 +1,16 @@
 import 'dart:async'; // Timer를 위해 추가
 import 'package:flutter/material.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
+import 'package:parent_helper/services/data_repository.dart';
 import 'package:provider/provider.dart';
 import '../services/ad_service.dart';
 import '../services/auth_service.dart';
-import '../services/firestore_service.dart';
 import '../screens/tabs/today_schedule_tab.dart';
 import '../screens/tabs/all_schedules_tab.dart';
 import '../screens/tabs/management_tab.dart';
 import '../screens/add_edit_schedule_screen.dart';
+import '../models/user.dart';
+import '../services/popup_service.dart';
 
 // 홈 화면의 각 탭을 정의하는 클래스
 class HomeTab {
@@ -28,6 +30,25 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkPopups();
+    });
+  }
+
+  Future<void> _checkPopups() async {
+    final dataRepository = Provider.of<DataRepository>(context, listen: false);
+    final popupService = PopupService();
+
+    final config = await dataRepository.getAppConfig();
+
+    if (mounted) {
+      await popupService.checkNoticesAndGuide(context, config);
+    }
+  }
 
   static const List<Widget> _tabs = <Widget>[
     TodayScheduleTab(),
@@ -51,20 +72,42 @@ class _HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context, listen: false);
-    final firestoreService = Provider.of<FirestoreService>(context, listen: false);
+    final firestoreService = Provider.of<DataRepository>(context, listen: false);
     final adService = Provider.of<AdService>(context, listen: false);
+    final user = Provider.of<AppUser?>(context);  // 유저 상태 감지
 
     return Scaffold(
       appBar: AppBar(
         title: const Text('등하원 알리미'),
         actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await authService.signOut();
-            },
-            tooltip: '로그아웃',
-          ),
+          // 로그인 상태일 때만 로그아웃 버튼 표시
+          if (user != null)
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: () async {
+                final bool confirm = await showDialog(
+                  context: context,
+                  builder: (ctx) => AlertDialog(
+                    title: const Text('로그아웃'),
+                    content: const Text('로그아웃 하시겠습니까?'),
+                    actions: [
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, false),
+                          child: const Text('취소')),
+                      TextButton(
+                          onPressed: () => Navigator.pop(ctx, true),
+                          child: const Text('로그아웃')),
+                    ],
+                  ),
+                ) ?? false;
+
+                if (confirm) {
+                  await authService.signOut();
+                  // 로그아웃 후 DataRepository가 자동으로 로컬 모드로 전환됨
+                }
+              },
+              tooltip: '로그아웃',
+            ),
         ],
       ),
       body: Column( // body를 Column으로 감싸기
@@ -159,11 +202,11 @@ class _HomeScreenState extends State<HomeScreen> {
 
     return Container(
       alignment: Alignment.center,
-      width: double.infinity,
+      width: AdSize.banner.width.toDouble(),
       height: bannerAd.size.height.toDouble(),
-      color: Colors.grey[100], // 광고 로딩 중 배경색
+      // color: Colors.grey[100], // 광고 로딩 중 배경색
       child: AdWidget(
-          ad: bannerAd,
+        ad: bannerAd,
         key: ValueKey('${bannerAd.adUnitId}_$_currentIndex'),
       ),
     );

@@ -1,20 +1,22 @@
+// import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
-import 'firebase_options.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:google_mobile_ads/google_mobile_ads.dart';
-import 'services/ad_service.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart'; // intl 초기화
-import '../services/auth_service.dart';
-import '../services/firestore_service.dart';
-import '../services/notification_service.dart';
-import '../screens/splash_screen.dart';
-import '../models/user.dart'; // FirebaseAuth User를 간단히 사용
-import '../utils/logger.dart';
+import 'firebase_options.dart';
+import 'models/user.dart'; // FirebaseAuth User를 간단히 사용
+import 'services/ad_service.dart';
+import 'services/auth_service.dart';
+import 'services/firestore_service.dart';
+import 'services/notification_service.dart';
+import 'screens/splash_screen.dart';
+import 'services/data_repository.dart';
+import 'utils/logger.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -68,22 +70,24 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        // AdService 제공
-        Provider<AdService>(
-          create: (_) => adService,
-        ),
-        // AuthService 제공
-        Provider<AuthService>(
-          create: (_) => AuthService(),
-        ),
-        // NotificationService 제공
-        Provider<NotificationService>(
-          create: (_) => notificationService,
-        ),
+        Provider<AdService>(create: (_) => adService),
+        Provider<AuthService>(create: (_) => AuthService()),
+        Provider<NotificationService>(create: (_) => notificationService),
+
         // 유저 스트림 제공
         StreamProvider<AppUser?>(
           create: (context) => context.read<AuthService>().user,
           initialData: null,
+        ),
+
+        // DataRepository를 ProxyProvider로 변경
+        // AppUser가 변경(로그인/로그아웃)될 때마다 updateAuth를 호출하여 데이터 소스를 즉시 전환
+        ProxyProvider<AppUser?, DataRepository>(
+          create: (_) => DataRepository(),
+          update: (_, user, repo) {
+            repo?.updateAuth(user);
+            return repo!;
+          },
         ),
         // FirestoreService 제공 (AuthService에 의존)
         ProxyProvider<AppUser?, FirestoreService>(
@@ -99,7 +103,7 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
           brightness: Brightness.light,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.indigo,
+            seedColor: Colors.orange,
             brightness: Brightness.light,
           ),
           visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -110,7 +114,7 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
           brightness: Brightness.dark,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.indigo,
+            seedColor: Colors.orange,
             brightness: Brightness.dark,
           ),
           visualDensity: VisualDensity.adaptivePlatformDensity,

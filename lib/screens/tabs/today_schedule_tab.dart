@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:parent_helper/services/data_repository.dart';
 import 'package:provider/provider.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
 import '../../models/schedule.dart';
-import '../../services/firestore_service.dart';
 import '../../widgets/schedule_list_item.dart';
 import '../add_edit_schedule_screen.dart';
 
@@ -21,7 +21,7 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = Provider.of<FirestoreService>(context);
+    final firestoreService = Provider.of<DataRepository>(context);
     final todayWeekday = DateTime.now().weekday;
 
     return Column(
@@ -29,8 +29,7 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
         _buildFilterBar(firestoreService),
         Expanded(
           child: StreamBuilder<List<Schedule>>(
-            // [!!!] 수정: getSchedulesForDay 대신 getAllSchedules() 호출
-            stream: firestoreService.getSchedules(),
+            stream: firestoreService.getAllSchedules(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
@@ -111,8 +110,7 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
   }
 
   // 필터 바 위젯
-  Widget _buildFilterBar(FirestoreService firestoreService) {
-
+  Widget _buildFilterBar(DataRepository firestoreService) {
     final roundedDropdownTheme = InputDecorationTheme(
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12.0),
