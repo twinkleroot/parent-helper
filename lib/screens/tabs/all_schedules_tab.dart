@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
 import '../../models/schedule.dart';
+import '../../models/user.dart';
 import '../../widgets/schedule_list_item.dart';
 import '../add_edit_schedule_screen.dart';
 
@@ -22,24 +23,30 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = Provider.of<DataRepository>(context);
+    // [중요] 로그인 상태(AppUser)가 변경되면 이 위젯을 다시 빌드하도록 구독합니다.
+    // 이를 통해 로그인 직후 DataRepository가 Firestore 데이터를 가져오게 됩니다.
+    Provider.of<AppUser?>(context);
+
+    final dataRepository = Provider.of<DataRepository>(context);
 
     return Column(
       children: [
         // 필터 영역
-        _buildFilterBar(firestoreService),
+        _buildFilterBar(dataRepository),
         // 리스트 영역
         Expanded(
           child: StreamBuilder<List<Schedule>>(
-            stream: firestoreService.getAllSchedules(),
+            stream: dataRepository.getAllSchedules(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+              final allSchedules = snapshot.data ?? [];
+
+              if (allSchedules.isEmpty) {
                 return const Center(
                   child: Text(
-                    '등록된 일정이 없습니다.\n[설정] 탭에서 자녀와 기관을 먼저 등록해주세요.',
+                    '등록된 일정이 없습니다.',
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 16, height: 1.5),
                   ),
@@ -73,7 +80,7 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
               if (filteredSchedules.isEmpty) {
                 return const Center(
                   child: Text(
-                    '필터 조건에 맞는 일정이 없습니다.',
+                    '선택한 조건에 맞는 일정이 없습니다.',
                     style: TextStyle(fontSize: 16),
                   ),
                 );
@@ -105,7 +112,7 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
   }
 
   // 필터 바 위젯
-  Widget _buildFilterBar(DataRepository firestoreService) {
+  Widget _buildFilterBar(DataRepository dateRepository) {
     // 둥근 모서리 테마 정의
     final roundedDropdownTheme = InputDecorationTheme(
       border: OutlineInputBorder(
@@ -153,12 +160,10 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
               // 자녀 필터
               Expanded(
                 child: StreamBuilder<List<Child>>(
-                  stream: firestoreService.getChildren(),
+                  stream: dateRepository.getChildren(),
                   builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const SizedBox.shrink(); // 로딩 중 UI 생략
-                    }
-                    final children = snapshot.data!;
+                    // [수정] 데이터가 없어도 표시
+                    final children = snapshot.data ?? [];
 
                     final List<DropdownMenuEntry<String?>> childEntries = [
                       const DropdownMenuEntry<String?>(
@@ -189,12 +194,10 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
               // 기관 필터
               Expanded(
                 child: StreamBuilder<List<Institution>>(
-                  stream: firestoreService.getInstitutions(),
+                  stream: dateRepository.getInstitutions(),
                   builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const SizedBox.shrink();
-                    }
-                    final institutions = snapshot.data!;
+                    // [수정] 데이터가 없어도 표시
+                    final institutions = snapshot.data ?? [];
 
                     final List<DropdownMenuEntry<String?>> instEntries = [
                       const DropdownMenuEntry<String?>(

@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:parent_helper/services/data_repository.dart';
 import 'package:provider/provider.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
 import '../../models/schedule.dart';
+import '../../models/user.dart';
+import '../../services/firestore_service.dart'; // DataRepository로 대체되지만 타입 호환 위해 유지
+import '../../services/data_repository.dart';
 import '../../widgets/schedule_list_item.dart';
 import '../add_edit_schedule_screen.dart';
 
@@ -21,20 +23,27 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = Provider.of<DataRepository>(context);
+    // [중요] 로그인 상태 변경 시 리빌드
+    Provider.of<AppUser?>(context);
+
+    final dataRepository = Provider.of<DataRepository>(context);
     final todayWeekday = DateTime.now().weekday;
 
     return Column(
       children: [
-        _buildFilterBar(firestoreService),
+        _buildFilterBar(dataRepository),
         Expanded(
           child: StreamBuilder<List<Schedule>>(
-            stream: firestoreService.getAllSchedules(),
+            stream: dataRepository.getAllSchedules(),
             builder: (context, snapshot) {
               if (snapshot.connectionState == ConnectionState.waiting) {
                 return const Center(child: CircularProgressIndicator());
               }
-              if (!snapshot.hasData || snapshot.data!.isEmpty) {
+
+              // 데이터가 없어도 빈 리스트로 처리하여 필터링 로직이 돌도록 함
+              final allSchedules = snapshot.data ?? [];
+
+              if (allSchedules.isEmpty) {
                 return const Center(
                   child: Text(
                     '등록된 일정이 없습니다.', // (전체 일정이 없을 때)
@@ -42,7 +51,6 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
                   ),
                 );
               }
-              final allSchedules = snapshot.data!;
 
               // Dart에서 3중 필터링 수행
               final filteredSchedules = allSchedules.where((schedule) {
@@ -110,7 +118,7 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
   }
 
   // 필터 바 위젯
-  Widget _buildFilterBar(DataRepository firestoreService) {
+  Widget _buildFilterBar(DataRepository dataRepository) {
     final roundedDropdownTheme = InputDecorationTheme(
       border: OutlineInputBorder(
         borderRadius: BorderRadius.circular(12.0),
@@ -157,12 +165,10 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
             children: [
               Expanded(
                 child: StreamBuilder<List<Child>>(
-                  stream: firestoreService.getChildren(),
+                  stream: dataRepository.getChildren(),
                   builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const SizedBox.shrink(); // 로딩 중 UI 생략
-                    }
-                    final children = snapshot.data!;
+                    // [수정] 데이터가 없어도 드롭다운 표시 (빈 리스트 처리)
+                    final children = snapshot.data ?? [];
 
                     final List<DropdownMenuEntry<String?>> childEntries = [
                       const DropdownMenuEntry<String?>(
@@ -193,12 +199,10 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
               // 기관 필터
               Expanded(
                 child: StreamBuilder<List<Institution>>(
-                  stream: firestoreService.getInstitutions(),
+                  stream: dataRepository.getInstitutions(),
                   builder: (context, snapshot) {
-                    if (!snapshot.hasData) {
-                      return const SizedBox.shrink();
-                    }
-                    final institutions = snapshot.data!;
+                    // [수정] 데이터가 없어도 드롭다운 표시 (빈 리스트 처리)
+                    final institutions = snapshot.data ?? [];
 
                     final List<DropdownMenuEntry<String?>> instEntries = [
                       const DropdownMenuEntry<String?>(

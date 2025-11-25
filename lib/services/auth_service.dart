@@ -89,44 +89,53 @@ class AuthService {
       return false;
     }
 
-    // [중요] 계정 삭제는 민감한 작업이므로, Google 재인증을 먼저 수행합니다.
-    final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
-    if (googleUser == null) {
-      logger.i('계정 삭제를 위한 재인증이 취소되었습니다.');
-      return false; // 사용자가 재인증 취소
+    try {
+      // [중요] 계정 삭제는 민감한 작업이므로, Google 재인증을 먼저 수행합니다.
+      final GoogleSignInAccount? googleUser = await _googleSignIn.authenticate();
+      if (googleUser == null) {
+        logger.i('계정 삭제를 위한 재인증이 취소되었습니다.');
+        return false; // 사용자가 재인증 취소
+      }
+
+      // 1. idToken을 가져옵니다. (await 제거)
+      final GoogleSignInAuthentication googleAuth = googleUser.authentication;
+      final String? idToken = googleAuth.idToken;
+
+      // 2. accessToken을 authorizationClient를 통해 가져옵니다.
+      //    'email' 스코프는 Firebase 인증에 필요할 수 있습니다.
+      final GoogleSignInClientAuthorization authClient = await googleUser.authorizationClient.authorizeScopes(['email']);
+      final String accessToken = authClient.accessToken;
+
+      if (idToken == null) {
+        logger.e('재인증 토큰 가져오기 실패');
+        return false;
+      }
+
+      // 새로운 토큰 값으로 credential 생성
+      final credential = GoogleAuthProvider.credential(
+        accessToken: accessToken,
+        idToken: idToken,
+      );
+
+      // 현재 사용자를 Firebase에 재인증
+      await user.reauthenticateWithCredential(credential);
+
+      // 재인증 성공 시, 계정 삭제
+      await user.delete();
+
+      logger.i('Firebase Auth 계정 삭제 성공.');
+
+      // Google에서도 로그아웃
+      await _googleSignIn.signOut();
+      await _auth.signOut();
+
+      return true;
+    } catch (e) {
+      // 사용자 취소인 경우 (PlatformException code check 등 가능하지만 단순화)
+      logger.e('계정 삭제 실패: $e');
+      // 상위로 에러를 던져서 스낵바를 띄울지 결정하게 함
+      // 단, 재인증 취소는 위에서 false로 리턴했으므로 여기는 진짜 에러임
+      rethrow;
     }
-
-    // 1. idToken을 가져옵니다. (await 제거)
-    final GoogleSignInAuthentication googleAuth = googleUser.authentication;
-    final String? idToken = googleAuth.idToken;
-
-    // 2. accessToken을 authorizationClient를 통해 가져옵니다.
-    //    'email' 스코프는 Firebase 인증에 필요할 수 있습니다.
-    final GoogleSignInClientAuthorization authClient = await googleUser.authorizationClient.authorizeScopes(['email']);
-    final String accessToken = authClient.accessToken;
-
-    if (idToken == null) {
-      logger.e('재인증 토큰 가져오기 실패');
-      return false;
-    }
-
-    // 새로운 토큰 값으로 credential 생성
-    final credential = GoogleAuthProvider.credential(
-      accessToken: accessToken,
-      idToken: idToken,
-    );
-
-    // 현재 사용자를 Firebase에 재인증
-    await user.reauthenticateWithCredential(credential);
-
-    // 재인증 성공 시, 계정 삭제
-    await user.delete();
-
-    logger.i('Firebase Auth 계정 삭제 성공.');
-
-    // Google에서도 로그아웃
-    await _googleSignIn.signOut();
-
-    return true;
   }
 }

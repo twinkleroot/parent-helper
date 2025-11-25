@@ -19,9 +19,9 @@ class AdService {
   bool get isBannerAdListLoaded => _bannerAdList != null;
   bool get isBannerAdMgmtLoaded => _bannerAdMgmt != null;
 
-  BannerAd get bannerAdHome => _bannerAdHome!;
-  BannerAd get bannerAdList => _bannerAdList!;
-  BannerAd get bannerAdMgmt => _bannerAdMgmt!;
+  BannerAd? get bannerAdHome => _bannerAdHome;
+  BannerAd? get bannerAdList => _bannerAdList;
+  BannerAd? get bannerAdMgmt => _bannerAdMgmt;
 
   // 광고 로드 완료를 보장하기 위한 Completer 추가
   Completer<void> _appOpenAdCompleter = Completer<void>();

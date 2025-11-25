@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart' as permission_handler;
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../models/user.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
 import '../../services/auth_service.dart';
@@ -168,86 +169,78 @@ class ManagementTab extends StatelessWidget {
     );
   }
 
-  // 계정 탈퇴 UI 및 로직
+  // 계정 관리 UI 및 로직
   Widget _buildAccountManagementSection(BuildContext context) {
-    return StreamBuilder<User?>(
-        stream: FirebaseAuth.instance.authStateChanges(),
-        builder: (context, snapshot) {
-          final user = snapshot.data;
-          final isLogged = user != null;
+    final user = Provider.of<AppUser?>(context);
+    final isLogged = user != null;
 
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '계정 관리',
-                style: Theme
-                    .of(context)
-                    .textTheme
-                    .titleLarge,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          '계정 관리',
+          style: Theme.of(context).textTheme.titleLarge,
+        ),
+        const SizedBox(height: 8),
+
+        if (!isLogged)
+        // 1. 비로그인 상태: 계정 연동 유도
+          Card(
+            // color: Colors.white70, // 강조 색상
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: Colors.white24, width: 1),
+            ),
+            child: ListTile(
+              contentPadding: const EdgeInsets.all(16),
+              leading: const CircleAvatar(
+                backgroundColor: Colors.white,
+                child: Icon(Icons.cloud_upload, color: Colors.green),
               ),
-              const SizedBox(height: 8),
-              if (!isLogged)
-              // 1. 비로그인 상태: 계정 연동 유도
-                Card(
-                  // color: Colors.white70, // 강조 색상
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.white24, width: 1),
-                  ),
-                  child: ListTile(
-                    contentPadding: const EdgeInsets.all(16),
-                    leading: const CircleAvatar(
-                      backgroundColor: Colors.white,
-                      child: Icon(Icons.cloud_upload, color: Colors.green),
-                    ),
-                    title: const Text(
-                      '구글 계정 연동하고 데이터 백업하기',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: Colors.green,
-                      ),
-                    ),
-                    subtitle: const Padding(
-                      padding: EdgeInsets.only(top: 6.0),
-                      child: Text(
-                        '현재 데이터는 기기에만 저장되어 있습니다.\n앱 삭제나 기기 변경 시 데이터 유실을 방지하려면 계정을 연동해주세요.',
-                        style: TextStyle(fontSize: 13, height: 1.4),
-                      ),
-                    ),
-                    onTap: () => _handleLinkAccount(context),
-                  ),
-                )
-              else
-              // 2. 로그인 상태: 계정 정보 및 관리
-                Card(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        leading: const Icon(
-                            Icons.account_circle, color: Colors.green),
-                        title: const Text('구글 계정 연동됨'),
-                        subtitle: Text(user.email ?? '이메일 정보 없음'),
-                        trailing: TextButton(
-                          onPressed: () => _handleSignOut(context),
-                          child: const Text(
-                              '로그아웃', style: TextStyle(color: Colors.grey)),
-                        ),
-                      ),
-                      const Divider(height: 1, indent: 16, endIndent: 16),
-                      ListTile(
-                        title: const Text('계정 탈퇴'),
-                        subtitle: const Text('모든 데이터(서버/로컬)를 삭제하고 탈퇴합니다.'),
-                        leading: const Icon(
-                            Icons.delete_forever, color: Colors.red),
-                        onTap: () => _showAccountDeletionConfirmation(context),
-                      ),
-                    ],
+              title: const Text(
+                '구글 계정 연동하고 데이터 백업하기',
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: Colors.green,
+                ),
+              ),
+              subtitle: const Padding(
+                padding: EdgeInsets.only(top: 6.0),
+                child: Text(
+                  '현재 데이터는 기기에만 저장되어 있습니다.\n앱 삭제나 기기 변경 시 데이터 유실을 방지하려면 계정을 연동해주세요.',
+                  style: TextStyle(fontSize: 13, height: 1.4),
+                ),
+              ),
+              onTap: () => _handleLinkAccount(context),
+            ),
+          )
+        else
+        // 2. 로그인 상태: 계정 정보 및 관리
+          Card(
+            child: Column(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.account_circle, color: Colors.green),
+                  title: const Text('구글 계정 연동됨'),
+                  subtitle: Text(FirebaseAuth.instance.currentUser?.email ?? '이메일 정보 없음'),
+                  trailing: TextButton(
+                    onPressed: () => _handleSignOut(context),
+                    child: const Text(
+                        '로그아웃', style: TextStyle(color: Colors.grey)),
                   ),
                 ),
-            ],
-          );
-        },
+                const Divider(height: 1, indent: 16, endIndent: 16),
+                ListTile(
+                  title: const Text('계정 탈퇴'),
+                  subtitle: const Text('모든 데이터(서버/로컬)를 삭제하고 탈퇴합니다.'),
+                  leading: const Icon(
+                      Icons.delete_forever, color: Colors.red),
+                  onTap: () => _showAccountDeletionConfirmation(context),
+                ),
+              ],
+            ),
+          ),
+      ],
     );
   }
 

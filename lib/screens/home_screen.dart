@@ -30,6 +30,7 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
+  late List<HomeTab> _widgetOptions;
 
   @override
   void initState() {
@@ -50,11 +51,33 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
-  static const List<Widget> _tabs = <Widget>[
-    TodayScheduleTab(),
-    AllSchedulesTab(),
-    ManagementTab(),
-  ];
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // [중요] AppUser 상태 변경을 감지하여 위젯 리스트를 재생성
+    // 이렇게 해야 로그인/로그아웃 시 탭들이 다시 빌드되면서 DataRepository의 변경된 상태를 반영함
+    Provider.of<AppUser?>(context); // 리빌드 트리거
+
+    final adService = Provider.of<AdService>(context, listen: false);
+
+    _widgetOptions = [
+      HomeTab(
+        title: '오늘 일정',
+        widget: const TodayScheduleTab(),
+        bannerAd: adService.bannerAdHome,
+      ),
+      HomeTab(
+        title: '전체 일정',
+        widget: const AllSchedulesTab(),
+        bannerAd: adService.bannerAdList,
+      ),
+      HomeTab(
+        title: '설정',
+        widget: const ManagementTab(),
+        bannerAd: adService.bannerAdMgmt,
+      ),
+    ];
+  }
 
   void _onItemTapped(int index) {
     setState(() {
@@ -69,6 +92,22 @@ class _HomeScreenState extends State<HomeScreen> {
     super.dispose();
   }
 
+  Widget _buildBannerAdWidget(BannerAd? bannerAd) {
+    if (bannerAd == null) {
+      return const SizedBox(height: 50.0);
+    }
+
+    return Container(
+      alignment: Alignment.center,
+      width: AdSize.banner.width.toDouble(),
+      height: AdSize.banner.height.toDouble(),
+      child: AdWidget(
+        ad: bannerAd,
+        key: ValueKey('${bannerAd.adUnitId}_$_currentIndex'),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context, listen: false);
@@ -76,9 +115,15 @@ class _HomeScreenState extends State<HomeScreen> {
     final adService = Provider.of<AdService>(context, listen: false);
     final user = Provider.of<AppUser?>(context);  // 유저 상태 감지
 
+    // _widgetOptions이 초기화되기 전이나 범위 밖일 경우 대비
+    if (_currentIndex >= _widgetOptions.length) {
+      _currentIndex = 0;
+    }
+    final currentTab = _widgetOptions[_currentIndex];
+
     return Scaffold(
       appBar: AppBar(
-        title: const Text('등하원 알리미'),
+        title: Text(currentTab.title),
         actions: [
           // 로그인 상태일 때만 로그아웃 버튼 표시
           if (user != null)
@@ -116,24 +161,13 @@ class _HomeScreenState extends State<HomeScreen> {
           Expanded(
             child: IndexedStack(
               index: _currentIndex,
-              children: _tabs,
+              children: _widgetOptions.map((e) => e.widget).toList(),
             ),
           ),
-
-          // 2. 현재 탭에 맞는 배너 광고 표시 영역
-          if (_currentIndex == 0 && adService.isBannerAdHomeLoaded)
-            _buildBannerContainer(adService.bannerAdHome),
-
-          if (_currentIndex == 1 && adService.isBannerAdListLoaded)
-            _buildBannerContainer(adService.bannerAdList),
-
-          if (_currentIndex == 2 && adService.isBannerAdMgmtLoaded)
-            _buildBannerContainer(adService.bannerAdMgmt),
+          _buildBannerAdWidget(currentTab.bannerAd),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _currentIndex,
-        onTap: _onItemTapped,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.today),
@@ -148,6 +182,8 @@ class _HomeScreenState extends State<HomeScreen> {
             label: '설정',
           ),
         ],
+        currentIndex: _currentIndex,
+        onTap: _onItemTapped,
       ),
       // FAB를 Scaffold에 직접 추가
       floatingActionButton: _currentIndex == 0 || _currentIndex == 1
@@ -176,8 +212,6 @@ class _HomeScreenState extends State<HomeScreen> {
                       );
                     },
                   );
-                  // 4. '설정' 탭(index 2)으로 이동시킵니다.
-                  _onItemTapped(2);
                 } else {
                   // 5. 데이터가 모두 있으면 기존처럼 일정 등록 화면으로 이동합니다.
                   Navigator.of(context).push(
