@@ -167,30 +167,32 @@ class _SplashScreenState extends State<SplashScreen> {
     return Scaffold(
       // 이미지가 로드되기 전 배경색 (이미지 배경색과 맞추는 것 추천)
       backgroundColor: Colors.white,
-      body: Stack(
-        fit: StackFit.expand, // 화면 전체 채우기
-        children: [
-          // 1. 전체 화면 배경 이미지
-          Image.asset(
-            'assets/images/loading.png',
-            // fit: BoxFit.cover, // 이미지가 화면을 꽉 채우도록 설정 (비율 유지하며 잘릴 수 있음)
-            // 만약 이미지가 잘리지 않고 모두 보여야 한다면 BoxFit.contain 사용 후 배경색 조정
-            fit: BoxFit.contain,
-          ),
+      body: SafeArea(
+        child: Stack(
+          fit: StackFit.expand, // 화면 전체 채우기
+          children: [
+            // 1. 전체 화면 배경 이미지
+            Image.asset(
+              'assets/images/loading.png',
+              // fit: BoxFit.cover, // 이미지가 화면을 꽉 채우도록 설정 (비율 유지하며 잘릴 수 있음)
+              // 만약 이미지가 잘리지 않고 모두 보여야 한다면 BoxFit.contain 사용 후 배경색 조정
+              fit: BoxFit.contain,
+            ),
 
-          // 2. 로딩 인디케이터 (이미지 위에 표시)
-          const Positioned(
-            bottom: 100, // 하단에서 100px 위로
-            left: 0,
-            right: 0,
-            child: Center(
-              child: CircularProgressIndicator(
-                // 이미지 색상에 따라 인디케이터 색상이 잘 보이도록 조정 필요
-                color: Colors.white, // 또는 Colors.orange
+            // 2. 로딩 인디케이터 (이미지 위에 표시)
+            const Positioned(
+              bottom: 300, // 하단에서 300px 위로
+              left: 0,
+              right: 0,
+              child: Center(
+                child: CircularProgressIndicator(
+                  // 이미지 색상에 따라 인디케이터 색상이 잘 보이도록 조정 필요
+                  color: Colors.white, // 또는 Colors.orange
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

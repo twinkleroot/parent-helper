@@ -103,7 +103,7 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
           brightness: Brightness.light,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.orange,
+            seedColor: Colors.green,
             brightness: Brightness.light,
           ),
           visualDensity: VisualDensity.adaptivePlatformDensity,
@@ -114,7 +114,7 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
           brightness: Brightness.dark,
           colorScheme: ColorScheme.fromSeed(
-            seedColor: Colors.orange,
+            seedColor: Colors.green.shade900,
             brightness: Brightness.dark,
           ),
           visualDensity: VisualDensity.adaptivePlatformDensity,

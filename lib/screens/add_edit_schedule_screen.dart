@@ -86,7 +86,7 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
         daysOfWeek: _daysOfWeek,
         time: _time,
         notificationLeadTimeInMinutes: _leadTime,
-        isEnabled: widget.scheduleToEdit?.isEnabled ?? true, // 기본값 true
+        isEnabled: _isEnabled,
         memo: _memoController.text.trim(),
       );
 
@@ -108,6 +108,7 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
             time: schedule.time,
             notificationLeadTimeInMinutes: schedule.notificationLeadTimeInMinutes,
             isEnabled: schedule.isEnabled,
+            memo: schedule.memo,
           );
           // 생성 시에도 isEnabled 체크
           if (newScheduleWithId.isEnabled) {
@@ -123,7 +124,7 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
           // 새 정보로 알림 다시 예약
           if (schedule.isEnabled) {
             await notificationService.scheduleWeeklyNotification(schedule);
-            }
+          }
         }
 
         if (mounted) {

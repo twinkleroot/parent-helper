@@ -143,11 +143,11 @@ class DataRepository {
     }
   }
 
-  Future<void> addInstitution(String name, String contact) async {
+  Future<void> addInstitution(String name, String contact, {String memo = ''}) async {
     if (isLogged) {
-      await FirestoreService(uid: _auth.currentUser!.uid).addInstitution(Institution(id: '', name: name, contactNumber: contact));
+      await FirestoreService(uid: _auth.currentUser!.uid).addInstitution(Institution(id: '', name: name, contactNumber: contact, memo: memo));
     } else {
-      await _localDb.addInstitution(name, contact);
+      await _localDb.addInstitution(name, contact, memo);
       _refreshLocalData();
     }
   }
@@ -196,7 +196,7 @@ class DataRepository {
 
     // 기관 업로드
     for (var inst in localInsts) {
-      final ref = await firestore.addReturnRefInstitution(inst.name, inst.contactNumber);
+      final ref = await firestore.addReturnRefInstitution(inst.name, inst.contactNumber, inst.memo);
       instIdMap[inst.id] = ref.id;
     }
 
@@ -223,9 +223,10 @@ class DataRepository {
       }
     }
 
+    // [수정] 연동 후 로컬 데이터를 삭제하지 않고 유지합니다. -> 주석처리
     // 3. 로컬 데이터 삭제
-    await _localDb.clearAllData();
-    _refreshLocalData();
+    // await _localDb.clearAllData();
+    // _refreshLocalData();
   }
 
   Future<void> deleteAllUserData() async {

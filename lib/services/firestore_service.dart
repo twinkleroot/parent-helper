@@ -261,9 +261,8 @@ class FirestoreService {
     return ref.add({'name': name});
   }
 
-  Future<DocumentReference> addReturnRefInstitution(String name, String contactNumber) {
+  Future<DocumentReference> addReturnRefInstitution(String name, String contactNumber, String memo) {
     if (uid == null) throw Exception('User not logged in');
-    final ref = _db.collection('users').doc(uid).collection('institutions');
-    return ref.add({'name': name, 'contactNumber': contactNumber});
+    return _institutionsCollection.add(Institution(id: '', name: name, contactNumber: contactNumber, memo: memo));
   }
 }

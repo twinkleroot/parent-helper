@@ -23,7 +23,7 @@ class LocalDatabaseService {
     String path = join(await getDatabasesPath(), 'pickup_pal_local.db');
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE children(
@@ -35,7 +35,8 @@ class LocalDatabaseService {
           CREATE TABLE institutions(
             id TEXT PRIMARY KEY,
             name TEXT,
-            contactNumber TEXT
+            contactNumber TEXT,
+            memo TEXT
           )
         ''');
         await db.execute('''
@@ -53,6 +54,13 @@ class LocalDatabaseService {
             memo TEXT
           )
         ''');
+      },
+      // 기존 사용자(버전 1)를 위한 업그레이드 로직
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          // institutions 테이블에 memo 컬럼 추가
+          await db.execute('ALTER TABLE institutions ADD COLUMN memo TEXT');
+        }
       },
     );
   }
@@ -91,10 +99,15 @@ class LocalDatabaseService {
     return List.generate(maps.length, (i) => Institution.fromMap(maps[i]));
   }
 
-  Future<String> addInstitution(String name, String contactNumber) async {
+  Future<String> addInstitution(String name, String contactNumber, String memo) async {
     final db = await database;
     final id = _uuid.v4();
-    await db.insert('institutions', {'id': id, 'name': name, 'contactNumber': contactNumber});
+    await db.insert('institutions', {
+      'id': id,
+      'name': name,
+      'contactNumber': contactNumber,
+      'memo': memo
+    });
     return id;
   }
 

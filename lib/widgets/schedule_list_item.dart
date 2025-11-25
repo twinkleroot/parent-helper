@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../models/schedule.dart';
-import '../services/firestore_service.dart';
+import '../services/data_repository.dart';
 import '../services/notification_service.dart';
 import '../utils/logger.dart';
 
@@ -65,14 +65,16 @@ class ScheduleListItem extends StatelessWidget {
             width: 60, // 너비 고정
             alignment: Alignment.center,
             decoration: BoxDecoration(
-              color: schedule.type == ScheduleType.pickup
-                  ? Colors.blue.shade50
-                  : Colors.green.shade50,
+              // color: schedule.type == ScheduleType.pickup
+              //     ? Colors.green.shade100
+              //     : Colors.green.shade100,
+              // color: Colors.white70,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: schedule.type == ScheduleType.pickup
-                    ? Colors.blue.shade200
-                    : Colors.green.shade200,
+                // color: schedule.type == ScheduleType.pickup
+                //     ? Colors.green.shade200
+                //     : Colors.green.shade200,
+                color: Colors.green.shade700,
               ),
             ),
             child: Column(
@@ -82,7 +84,7 @@ class ScheduleListItem extends StatelessWidget {
                   amPm, // "오전" 또는 "오후"
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.grey.shade700,
+                    // color: Colors.grey.shade700,
                     fontWeight: FontWeight.w500,
                   ),
                 ),
@@ -91,10 +93,21 @@ class ScheduleListItem extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
-                    color: schedule.type == ScheduleType.pickup
-                        ? Colors.blue.shade800
-                        : Colors.green.shade800,
+                    // color: schedule.type == ScheduleType.pickup
+                    //     ? Colors.green.shade800
+                    //     : Colors.blue.shade800,
                     height: 1.1, // 줄 간격 조절
+                  ),
+                ),
+                Text(
+                  '<${schedule.type == ScheduleType.pickup ? '등원' : '하원'}>',
+                  style: TextStyle(
+                    fontSize: 9,
+                    // fontStyle: FontStyle.italic,
+                    // fontWeight: FontWeight.bold,
+                    // color: schedule.type == ScheduleType.pickup
+                    //     ? Colors.green.shade800
+                    //     : Colors.blue.shade800,
                   ),
                 ),
               ],
@@ -104,7 +117,7 @@ class ScheduleListItem extends StatelessWidget {
           title: Padding(
             padding: const EdgeInsets.only(bottom: 4.0),
             child: Text(
-              '${schedule.childName} - ${schedule.institutionName}',
+              '${schedule.childName} | ${schedule.institutionName}',
               style: const TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
@@ -147,7 +160,7 @@ class ScheduleListItem extends StatelessWidget {
             child: Switch(
               value: schedule.isEnabled,
               onChanged: (value) async {
-                final firestoreService = context.read<FirestoreService>();
+                final dataRepository = context.read<DataRepository>();
                 final notificationService = context.read<NotificationService>();
 
                 final updatedSchedule = Schedule(
@@ -166,7 +179,7 @@ class ScheduleListItem extends StatelessWidget {
                 );
 
                 try {
-                  await firestoreService.updateSchedule(updatedSchedule);
+                  await dataRepository.updateSchedule(updatedSchedule);
                   if (value) {
                     await notificationService
                         .scheduleWeeklyNotification(updatedSchedule);
@@ -207,12 +220,12 @@ class ScheduleListItem extends StatelessWidget {
             onPressed: () async {
               try {
                 // Provider에서 서비스 가져오기 (listen: false)
-                final firestoreService = context.read<FirestoreService>();
+                final dataRepository = context.read<DataRepository>();
                 final notificationService = context.read<NotificationService>();
 
                 // 1. Firestore에서 삭제
                 // 사용자님이 제공한 모델의 id는 non-nullable이므로 '!' 제거
-                await firestoreService.deleteSchedule(schedule.id);
+                await dataRepository.deleteSchedule(schedule.id);
                 // 2. 예약된 알림 취소
                 await notificationService.cancelNotificationsForSchedule(schedule);
 

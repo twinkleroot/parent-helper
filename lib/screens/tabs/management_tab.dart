@@ -113,7 +113,7 @@ class ManagementTab extends StatelessWidget {
         // 앱 사용 가이드 버튼
         Card(
           child: ListTile(
-            leading: const Icon(Icons.help_outline, color: Colors.orange),
+            leading: const Icon(Icons.help_outline, color: Colors.amber),
             title: const Text('앱 사용 가이드'),
             subtitle: const Text('등하원 알리미 사용 방법을 다시 확인합니다.'),
             onTap: () {
@@ -190,22 +190,22 @@ class ManagementTab extends StatelessWidget {
               if (!isLogged)
               // 1. 비로그인 상태: 계정 연동 유도
                 Card(
-                  color: Colors.indigo.shade50, // 강조 색상
+                  // color: Colors.white70, // 강조 색상
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(12),
-                    side: BorderSide(color: Colors.indigo.shade100, width: 1),
+                    side: BorderSide(color: Colors.white24, width: 1),
                   ),
                   child: ListTile(
                     contentPadding: const EdgeInsets.all(16),
                     leading: const CircleAvatar(
                       backgroundColor: Colors.white,
-                      child: Icon(Icons.cloud_upload, color: Colors.indigo),
+                      child: Icon(Icons.cloud_upload, color: Colors.green),
                     ),
                     title: const Text(
                       '구글 계정 연동하고 데이터 백업하기',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.indigo,
+                        color: Colors.green,
                       ),
                     ),
                     subtitle: const Padding(
@@ -271,9 +271,8 @@ class ManagementTab extends StatelessWidget {
       if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
 
       if (user != null) {
-        // 로그인 성공 시 Repository의 Auth 상태 갱신
-        // (DataRepository 내부에서 FirebaseAuth를 직접 감지하거나, 여기서 수동 갱신)
-        // DataRepository가 FirebaseAuth.instance.currentUser를 직접 쓰므로 자동 반영됨.
+        // 로그인 성공 시 Repository의 Auth 상태를 수동으로 즉시 갱신
+        dataRepository.updateAuth(user);
 
         if (context.mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -492,7 +491,19 @@ class ManagementTab extends StatelessWidget {
             return Card(
               child: ListTile(
                 title: Text(inst.name),
-                subtitle: Text(formattedContact),
+                subtitle: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (formattedContact.isNotEmpty) Text(formattedContact),
+                    if (inst.memo.isNotEmpty)
+                      Text(
+                        inst.memo,
+                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                  ],
+                ),
                 // onTap으로 수정 다이얼로그
                 onTap: () {
                   _showAddEditInstitutionDialog(context, firestoreService, institutionToEdit : inst);
@@ -579,6 +590,7 @@ class ManagementTab extends StatelessWidget {
     final bool isEditing = institutionToEdit != null;
     final nameController = TextEditingController(text: institutionToEdit?.name ?? '');
     final contactController = TextEditingController(text: institutionToEdit != null ? _formatPhoneNumber(institutionToEdit.contactNumber) : '');
+    final memoController = TextEditingController(text: institutionToEdit?.memo);
 
     showDialog(
       context: context,
@@ -605,6 +617,15 @@ class ManagementTab extends StatelessWidget {
                   decoration: const InputDecoration(labelText: '연락처 (선택)'),
                   keyboardType: TextInputType.phone,
                 ),
+                // 메모 필드
+                TextFormField(
+                  controller: memoController,
+                  decoration: const InputDecoration(
+                    labelText: '메모 (선택 사항)',
+                    hintText: '예: 담당 선생님 성함, 셔틀 기사님 번호 등',
+                  ),
+                  // maxLines: 1,
+                ),
               ],
             ),
           ),
@@ -619,6 +640,7 @@ class ManagementTab extends StatelessWidget {
                 if (formKey.currentState!.validate()) {
                   final name = nameController.text.trim();
                   final contact = _formatPhoneNumber(contactController.text.trim());
+                  final memo = memoController.text.trim();
 
                   if (isEditing) {
                     // 수정
@@ -626,10 +648,10 @@ class ManagementTab extends StatelessWidget {
                       id: institutionToEdit.id,
                       name: name,
                       contactNumber: contact,
+                      memo: memo,
                     ));
                   } else {
-                    // 추가
-                    await firestoreService.addInstitution(name, contact);
+                    await firestoreService.addInstitution(name, contact, memo: memo);
                   }
                   Navigator.of(ctx).pop();
                 }
