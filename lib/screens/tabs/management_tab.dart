@@ -452,7 +452,34 @@ class ManagementTab extends StatelessWidget {
                   context,
                   title: '자녀 삭제',
                   content: '${child.name} 님을 목록에서 삭제하시겠습니까?',
-                  onConfirm: () => firestoreService.deleteChild(child.id),
+                  onConfirm: () async {
+                    try {
+                      // 1. 알림 서비스 가져오기
+                      final notificationService = Provider.of<NotificationService>(context, listen: false);
+
+                      // 2. 현재 저장된 모든 스케줄 가져오기 (Stream의 최신 값)
+                      // 주의: snapshot.data를 사용하면 자녀 목록이므로 안됨. Repository에서 스케줄을 가져와야 함.
+                      final allSchedules = await firestoreService.getAllSchedules().first;
+
+                      // 3. 해당 자녀와 연관된 스케줄 필터링
+                      final relatedSchedules = allSchedules.where((s) => s.childId == child.id);
+
+                      // 4. 연관된 알림 모두 취소
+                      for (var schedule in relatedSchedules) {
+                        await notificationService.cancelNotificationsForSchedule(schedule);
+                      }
+
+                      // 5. 데이터 삭제 (자녀 및 연관 스케줄 DB 삭제)
+                      await firestoreService.deleteChild(child.id);
+                    } catch (e) {
+                      logger.e('자녀 삭제 중 오류 발생: $e');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('삭제 중 오류가 발생했습니다.')),
+                        );
+                      }
+                    }
+                  },
                 ),
               ),
             );
@@ -505,8 +532,34 @@ class ManagementTab extends StatelessWidget {
                 onLongPress: () => _showDeleteConfirmation(
                   context,
                   title: '기관 삭제',
-                  content: '${inst.name} 기관을 삭제하시겠습니까? (연결된 일정이 있다면 함께 정리해주세요)', // TODO: 일정 자동 삭제 로직?
-                  onConfirm: () => firestoreService.deleteInstitution(inst.id),
+                  content: '${inst.name} 기관을 삭제하시겠습니까? (연결된 일정이 있다면 함께 정리해주세요)',
+                  onConfirm: () async {
+                    try {
+                      // 1. 알림 서비스 가져오기
+                      final notificationService = Provider.of<NotificationService>(context, listen: false);
+
+                      // 2. 현재 저장된 모든 스케줄 가져오기
+                      final allSchedules = await firestoreService.getAllSchedules().first;
+
+                      // 3. 해당 기관과 연관된 스케줄 필터링
+                      final relatedSchedules = allSchedules.where((s) => s.institutionId == inst.id);
+
+                      // 4. 연관된 알림 모두 취소
+                      for (var schedule in relatedSchedules) {
+                        await notificationService.cancelNotificationsForSchedule(schedule);
+                      }
+
+                      // 5. 데이터 삭제 (기관 및 연관 스케줄 DB 삭제)
+                      await firestoreService.deleteInstitution(inst.id);
+                    } catch (e) {
+                      logger.e('기관 삭제 중 오류 발생: $e');
+                      if (context.mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('삭제 중 오류가 발생했습니다.')),
+                        );
+                      }
+                    }
+                  },
                 ),
                 // 전화 걸기 아이콘 버튼
                 trailing: inst.contactNumber.isNotEmpty

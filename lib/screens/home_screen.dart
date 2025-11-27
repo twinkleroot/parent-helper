@@ -203,7 +203,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     builder: (BuildContext dialogContext) {
                       return _AutoDismissDialog(
                         title: '안내',
-                        content: '일정을 등록하려면 먼저 자녀와 기관을 1개 이상 등록해야 합니다.',
+                        content: '일정을 등록하려면 먼저 자녀와 기관을 등록해야 합니다.',
                         // 다이얼로그가 닫힐 때 (버튼 클릭 or 3초)
                         onDismiss: () {
                           // 4. '설정' 탭(index 2)으로 이동시킵니다.

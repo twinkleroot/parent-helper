@@ -24,22 +24,34 @@ class DayOfWeekSelector extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ToggleButtons(
-      isSelected: _dayValues.map((day) => selectedDays.contains(day)).toList(),
-      onPressed: (index) {
-        final day = _dayValues[index];
-        List<int> newSelectedDays = List.from(selectedDays);
-        if (newSelectedDays.contains(day)) {
-          newSelectedDays.remove(day);
-        } else {
-          newSelectedDays.add(day);
-        }
-        onChanged(newSelectedDays);
-      },
-      children: _dayLabels.map((label) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 12.0), // 패딩 조절
-        child: Text(label),
-      )).toList(),
+    return Center(
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: ToggleButtons(
+          borderRadius: BorderRadius.circular(8.0),
+          isSelected: _dayValues.map((day) => selectedDays.contains(day)).toList(),
+          onPressed: (index) {
+            final day = _dayValues[index];
+            List<int> newSelectedDays = List.from(selectedDays);
+            if (newSelectedDays.contains(day)) {
+              newSelectedDays.remove(day);
+            } else {
+              newSelectedDays.add(day);
+            }
+            onChanged(newSelectedDays);
+          },
+          // 버튼의 최소 크기 제약 조건을 명시
+          constraints: const BoxConstraints(
+            minWidth: 40.0,
+            minHeight: 40.0,
+          ),
+          children: _dayLabels.map((label) => Padding(
+            // 내부 패딩을 적절히 조절
+            padding: const EdgeInsets.symmetric(horizontal: 12.0),
+            child: Text(label),
+          )).toList(),
+        ),
+      ),
     );
   }
 }

@@ -1,4 +1,5 @@
 import 'dart:async'; // Completer를 위해 import 추가
+import 'dart:math';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart'; // WidgetsBinding을 위해 필요
 import 'package:google_mobile_ads/google_mobile_ads.dart';
@@ -6,7 +7,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../utils/logger.dart';
 
 // 광고 로드 및 표시를 관리하는 서비스
-class AdService {
+class AdService with WidgetsBindingObserver {
   AppOpenAd? _appOpenAd;
   bool _isAppOpenAdShowing = false;
   bool _isAppOpenAdLoaded = false;
@@ -28,6 +29,42 @@ class AdService {
   Completer<void> _bannerHomeCompleter = Completer<void>();
   Completer<void> _bannerListCompleter = Completer<void>();
   Completer<void> _bannerMgmtCompleter = Completer<void>();
+
+  // 생성자에서 앱 생명주기 옵저버 등록
+  AdService() {
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  // 앱 상태 변경 감지 (Warm Start)
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // 앱이 백그라운드에서 포그라운드로 돌아올 때 (Resumed)
+    if (state == AppLifecycleState.resumed) {
+      _tryShowAdOnWarmStart();
+    }
+  }
+
+  // Warm Start 시 50% 확률로 광고 표시 시도
+  void _tryShowAdOnWarmStart() {
+    // 웹이거나 이미 광고가 떠있으면 스킵
+    if (kIsWeb || _isAppOpenAdShowing) return;
+
+    // 50% 확률 계산 (true or false)
+    final bool shouldShow = Random().nextBool();
+
+    if (shouldShow) {
+      logger.i('🔥 Warm Start: 50% 당첨! 광고 표시를 시도합니다.');
+      showAppOpenAdIfAvailable(onAdDismissed: () {
+        logger.i('🔥 Warm Start: 광고 닫힘');
+      });
+    } else {
+      logger.i('🔥 Warm Start: 광고 패스 (50% 확률 미당첨)');
+      // 광고를 보여주지 않더라도, 로드된 광고가 없다면 다음을 위해 로드 시도
+      if (!_isAppOpenAdLoaded) {
+        _loadAppOpenAd();
+      }
+    }
+  }
 
   String get _appOpenAdUnitId {
     if (kIsWeb) return '';
@@ -68,6 +105,11 @@ class AdService {
       _appOpenAdCompleter.complete(); // 웹이면 즉시 완료
       return;
     }
+    // 이미 로드되어 있거나 로딩 중이면 스킵
+    if (_isAppOpenAdLoaded) {
+      if (!_appOpenAdCompleter.isCompleted) _appOpenAdCompleter.complete();
+      return;
+    }
 
     AppOpenAd.load(
       adUnitId: _appOpenAdUnitId,
@@ -77,12 +119,12 @@ class AdService {
           _appOpenAd = ad;
           _isAppOpenAdLoaded = true;
           logger.i('AppOpenAd loaded.');
-          _appOpenAdCompleter.complete(); // 로드 성공 시 complete
+          if (!_appOpenAdCompleter.isCompleted) _appOpenAdCompleter.complete();
         },
         onAdFailedToLoad: (error) {
           _isAppOpenAdLoaded = false;
           logger.e('AppOpenAd failed to load: $error');
-          _appOpenAdCompleter.complete(); // 로드 실패 시에도 complete
+          if (!_appOpenAdCompleter.isCompleted) _appOpenAdCompleter.complete();
         },
       ),
     );
@@ -92,6 +134,8 @@ class AdService {
     if (_isAppOpenAdShowing || !_isAppOpenAdLoaded || _appOpenAd == null) {
       logger.w('AppOpenAd not available or already showing.');
       onAdDismissed();
+      // 광고가 없을 경우 다음을 위해 로드 시도
+      if (!_isAppOpenAdLoaded) _loadAppOpenAd();
       return;
     }
 
@@ -113,7 +157,7 @@ class AdService {
         _appOpenAd = null;
         _isAppOpenAdLoaded = false;
         onAdDismissed();
-        // 다음 광고를 미리 로드
+        // 광고가 닫히면 다음 광고를 미리 로드
         _loadAppOpenAd();
       },
       onAdFailedToShowFullScreenContent: (ad, error) {
@@ -123,6 +167,7 @@ class AdService {
         _isAppOpenAdLoaded = false;
         logger.e('AppOpenAd failed to show: $error');
         onAdDismissed();
+        _loadAppOpenAd();
       },
     );
 
@@ -131,7 +176,10 @@ class AdService {
 
   // --- 배너 광고 (Tabs) ---
   Future<void> _loadBannerAdHome() async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      _bannerHomeCompleter.complete();
+      return;
+    }
     _bannerAdHome = BannerAd(
       adUnitId: _bannerUnitId,
       request: const AdRequest(),
@@ -139,19 +187,23 @@ class AdService {
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           logger.i('Banner Home loaded.');
-          _bannerHomeCompleter.complete(); // 로드 성공 시 complete
+          if (!_bannerHomeCompleter.isCompleted) _bannerHomeCompleter.complete();
         },
         onAdFailedToLoad: (ad, err) {
           logger.e('Banner Home failed: $err');
           ad.dispose();
-          _bannerHomeCompleter.complete(); // 로드 실패 시에도 complete
+          _bannerAdHome = null;
+          if (!_bannerHomeCompleter.isCompleted) _bannerHomeCompleter.complete();
         },
       ),
     )..load();
   }
 
   Future<void> _loadBannerAdList() async {
-    if (kIsWeb) return;
+    if (kIsWeb) {
+      _bannerListCompleter.complete();
+      return;
+    }
     _bannerAdList = BannerAd(
       adUnitId: _bannerUnitId,
       request: const AdRequest(),
@@ -159,12 +211,13 @@ class AdService {
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           logger.i('Banner List loaded.');
-          _bannerListCompleter.complete(); // 로드 성공 시 complete
+          if (!_bannerMgmtCompleter.isCompleted) _bannerMgmtCompleter.complete();
         },
         onAdFailedToLoad: (ad, err) {
           logger.e('Banner List failed: $err');
           ad.dispose();
-          _bannerListCompleter.complete(); // 로드 실패 시에도 complete
+          _bannerAdList = null;
+          if (!_bannerMgmtCompleter.isCompleted) _bannerMgmtCompleter.complete();
         },
       ),
     )..load();
@@ -182,12 +235,13 @@ class AdService {
       listener: BannerAdListener(
         onAdLoaded: (ad) {
           logger.i('Banner Mgmt loaded.');
-          _bannerMgmtCompleter.complete(); // 로드 성공 시 complete
+          if (!_bannerMgmtCompleter.isCompleted) _bannerMgmtCompleter.complete();
         },
         onAdFailedToLoad: (ad, err) {
           logger.e('Banner Mgmt failed: $err');
           ad.dispose();
-          _bannerMgmtCompleter.complete(); // 로드 실패 시에도 complete
+          _bannerAdMgmt = null;
+          if (!_bannerMgmtCompleter.isCompleted) _bannerMgmtCompleter.complete();
         },
       ),
     )..load();
@@ -201,6 +255,8 @@ class AdService {
     _bannerAdHome = null;
     _bannerAdList = null;
     _bannerAdMgmt = null;
+    // 옵저버 제거
+    WidgetsBinding.instance.removeObserver(this);
   }
 }
 

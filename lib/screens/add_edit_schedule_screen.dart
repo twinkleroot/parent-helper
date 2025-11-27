@@ -296,10 +296,12 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
               onChanged: (days) => setState(() => _daysOfWeek = days),
             ),
             if (_daysOfWeek.isEmpty)
-              const Padding(
-                padding: EdgeInsets.only(top: 8.0),
-                child: Text('요일을 하나 이상 선택하세요.', style: TextStyle(color: Colors.red, fontSize: 12)),
-              ),
+              const Center(
+                      child: Padding(
+                        padding: EdgeInsets.only(top: 8.0),
+                        child: Text('요일을 하나 이상 선택하세요.', style: TextStyle(color: Colors.red, fontSize: 12)),
+                      )
+                    ),
             const SizedBox(height: 16),
             // 시간 선택
             ListTile(
