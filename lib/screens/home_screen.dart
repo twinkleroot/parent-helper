@@ -7,10 +7,11 @@ import '../services/ad_service.dart';
 import '../services/auth_service.dart';
 import '../screens/tabs/today_schedule_tab.dart';
 import '../screens/tabs/all_schedules_tab.dart';
+import '../screens/tabs/weekly_schedule_tab.dart';
 import '../screens/tabs/management_tab.dart';
-import '../screens/add_edit_schedule_screen.dart';
 import '../models/user.dart';
 import '../services/popup_service.dart';
+import '../models/app_config.dart';
 
 // 홈 화면의 각 탭을 정의하는 클래스
 class HomeTab {
@@ -25,12 +26,14 @@ class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
   @override
-  State<HomeScreen> createState() => _HomeScreenState();
+  State<HomeScreen> createState() => HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> {
+class HomeScreenState extends State<HomeScreen> {
   int _currentIndex = 0;
   late List<HomeTab> _widgetOptions;
+  // 앱 설정 상태
+  AppConfig? _appConfig;
 
   @override
   void initState() {
@@ -47,6 +50,9 @@ class _HomeScreenState extends State<HomeScreen> {
     final config = await dataRepository.getAppConfig();
 
     if (mounted) {
+      setState(() {
+        _appConfig = config; // 설정 저장 (광고 표시에 사용)
+      });
       await popupService.checkNoticesAndGuide(context, config);
     }
   }
@@ -57,7 +63,6 @@ class _HomeScreenState extends State<HomeScreen> {
     // [중요] AppUser 상태 변경을 감지하여 위젯 리스트를 재생성
     // 이렇게 해야 로그인/로그아웃 시 탭들이 다시 빌드되면서 DataRepository의 변경된 상태를 반영함
     Provider.of<AppUser?>(context); // 리빌드 트리거
-
     final adService = Provider.of<AdService>(context, listen: false);
 
     _widgetOptions = [
@@ -72,6 +77,11 @@ class _HomeScreenState extends State<HomeScreen> {
         bannerAd: adService.bannerAdList,
       ),
       HomeTab(
+        title: '주간 요약',
+        widget: const WeeklyScheduleTab(),
+        bannerAd: adService.bannerAdWeekly,
+      ),
+      HomeTab(
         title: '설정',
         widget: const ManagementTab(),
         bannerAd: adService.bannerAdMgmt,
@@ -79,7 +89,7 @@ class _HomeScreenState extends State<HomeScreen> {
     ];
   }
 
-  void _onItemTapped(int index) {
+  void onItemTapped(int index) {
     setState(() {
       _currentIndex = index;
     });
@@ -93,6 +103,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Widget _buildBannerAdWidget(BannerAd? bannerAd) {
+    // [추가] 1. Config가 아직 로드되지 않았거나,
+    // 2. DB 플래그(showBottomBanner)가 false이면 광고를 보여주지 않음
+    if (_appConfig == null || !_appConfig!.showBottomBanner) {
+      return const SizedBox.shrink(); // 아예 공간 차지 안 함
+    }
+
     if (bannerAd == null) {
       return const SizedBox(height: 50.0);
     }
@@ -112,7 +128,6 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context, listen: false);
     final firestoreService = Provider.of<DataRepository>(context, listen: false);
-    final adService = Provider.of<AdService>(context, listen: false);
     final user = Provider.of<AppUser?>(context);  // 유저 상태 감지
 
     // _widgetOptions이 초기화되기 전이나 범위 밖일 경우 대비
@@ -168,62 +183,28 @@ class _HomeScreenState extends State<HomeScreen> {
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
+        type: BottomNavigationBarType.fixed,
         items: const <BottomNavigationBarItem>[
           BottomNavigationBarItem(
             icon: Icon(Icons.today),
-            label: '오늘 일정',
+            label: 'Today',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.calendar_month),
-            label: '전체 일정',
+            label: 'Total',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.date_range),
+            label: 'Weekly',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.settings),
-            label: '설정',
+            label: 'Settings',
           ),
         ],
         currentIndex: _currentIndex,
-        onTap: _onItemTapped,
+        onTap: onItemTapped,
       ),
-      // FAB를 Scaffold에 직접 추가
-      floatingActionButton: _currentIndex == 0 || _currentIndex == 1
-          ? FloatingActionButton(
-              onPressed: () async {
-                // 1. Firestore에서 자녀/기관 목록을 1회성으로 가져옵니다.
-                final children = await firestoreService.getChildren().first;
-                final institutions = await firestoreService.getInstitutions().first;
-
-                if (!mounted) return; // 비동기 작업 후 context 유효성 검사
-
-                // 2. 자녀 또는 기관이 하나라도 비어있으면
-                if (children.isEmpty || institutions.isEmpty) {
-                  // 3. 안내 메시지를 띄우고
-                  showDialog(
-                    context: context,
-                    builder: (BuildContext dialogContext) {
-                      return _AutoDismissDialog(
-                        title: '안내',
-                        content: '일정을 등록하려면 먼저 자녀와 기관을 등록해야 합니다.',
-                        // 다이얼로그가 닫힐 때 (버튼 클릭 or 3초)
-                        onDismiss: () {
-                          // 4. '설정' 탭(index 2)으로 이동시킵니다.
-                          _onItemTapped(2);
-                        },
-                      );
-                    },
-                  );
-                } else {
-                  // 5. 데이터가 모두 있으면 기존처럼 일정 등록 화면으로 이동합니다.
-                  Navigator.of(context).push(
-                    MaterialPageRoute(
-                      builder: (context) => const AddEditScheduleScreen(),
-                    ),
-                  );
-                }
-              },
-              child: const Icon(Icons.add),
-            )
-          : null, // 설정 탭(index 2)에서는 FAB 숨김
     );
   }
 

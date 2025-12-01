@@ -7,6 +7,7 @@ import '../../models/schedule.dart';
 import '../../models/user.dart';
 import '../../widgets/schedule_list_item.dart';
 import '../add_edit_schedule_screen.dart';
+import '../home_screen.dart'; // HomeScreenState
 
 // StatefulWidget으로 변경 (필터 상태 관리를 위해)
 class AllSchedulesTab extends StatefulWidget {
@@ -21,6 +22,41 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
   String? _selectedInstitutionId;
   ScheduleType? _selectedType; // 등/하원 필터 상태 변수 추가
 
+  // 일정 추가 버튼 핸들러
+  Future<void> _onAddSchedulePressed(DataRepository dataRepository) async {
+    final children = await dataRepository.getChildren().first;
+    final institutions = await dataRepository.getInstitutions().first;
+
+    if (!mounted) return;
+
+    if (children.isEmpty || institutions.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('안내'),
+          content: const Text('일정을 등록하려면 먼저 자녀와 기관을 1개 이상 등록해야 합니다.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                // 설정 탭으로 이동
+                final homeState = context.findAncestorStateOfType<HomeScreenState>();
+                homeState?.onItemTapped(2);
+              },
+              child: const Text('설정으로 이동'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const AddEditScheduleScreen(),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // [중요] 로그인 상태(AppUser)가 변경되면 이 위젯을 다시 빌드하도록 구독합니다.
@@ -33,6 +69,27 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
       children: [
         // 필터 영역
         _buildFilterBar(dataRepository),
+        // [추가] 고정된 '새 일정 등록' 버튼
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _onAddSchedulePressed(dataRepository),
+              icon: const Icon(Icons.add),
+              label: const Text('새 일정 등록'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const Divider(),
         // 리스트 영역
         Expanded(
           child: StreamBuilder<List<Schedule>>(

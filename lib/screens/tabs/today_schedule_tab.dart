@@ -4,10 +4,10 @@ import '../../models/child.dart';
 import '../../models/institution.dart';
 import '../../models/schedule.dart';
 import '../../models/user.dart';
-import '../../services/firestore_service.dart'; // DataRepository로 대체되지만 타입 호환 위해 유지
 import '../../services/data_repository.dart';
 import '../../widgets/schedule_list_item.dart';
 import '../add_edit_schedule_screen.dart';
+import '../home_screen.dart';
 
 class TodayScheduleTab extends StatefulWidget {
   const TodayScheduleTab({super.key});
@@ -21,6 +21,40 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
   String? _selectedInstitutionId;
   ScheduleType? _selectedType; // 등/하원 필터 상태 변수 추가
 
+  Future<void> _onAddSchedulePressed(DataRepository dataRepository) async {
+    final children = await dataRepository.getChildren().first;
+    final institutions = await dataRepository.getInstitutions().first;
+
+    if (!mounted) return;
+
+    if (children.isEmpty || institutions.isEmpty) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('안내'),
+          content: const Text('일정을 등록하려면 먼저 자녀와 기관을 1개 이상 등록해야 합니다.'),
+          actions: [
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                // 설정 탭(index 2)으로 이동
+                final homeState = context.findAncestorStateOfType<HomeScreenState>();
+                homeState?.onItemTapped(2);
+              },
+              child: const Text('설정으로 이동'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => const AddEditScheduleScreen(),
+        ),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     // [중요] 로그인 상태 변경 시 리빌드
@@ -32,6 +66,29 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
     return Column(
       children: [
         _buildFilterBar(dataRepository),
+
+        // 고정된 '새 일정 등록' 버튼
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () => _onAddSchedulePressed(dataRepository),
+              icon: const Icon(Icons.add),
+              label: const Text('새 일정 등록'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primaryContainer,
+                foregroundColor: Theme.of(context).colorScheme.onPrimaryContainer,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const Divider(),
+
         Expanded(
           child: StreamBuilder<List<Schedule>>(
             stream: dataRepository.getAllSchedules(),

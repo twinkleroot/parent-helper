@@ -18,6 +18,9 @@ class AppConfig {
   final String noticeContent;
   final String storeUrl; // 스토어 주소 (Android/iOS 구분 필요 시 분리)
 
+  // 하단 배너 광고 표시 여부
+  final bool showBottomBanner;
+
   AppConfig({
     required this.latestVersion,
     required this.minVersion,
@@ -30,6 +33,7 @@ class AppConfig {
     this.noticeTitle = '',
     this.noticeContent = '',
     this.storeUrl = '',
+    this.showBottomBanner = true, // 기본값 true
   });
 
   factory AppConfig.fromFirestore(DocumentSnapshot doc) {
@@ -46,7 +50,8 @@ class AppConfig {
       noticeEnd: data['notice_end_date'] as String?,
       noticeTitle: data['notice_title'] ?? '공지사항',
       noticeContent: data['notice_content'] ?? '',
-      storeUrl: data['store_url'] ?? 'https://play.google.com/store/apps',
+      storeUrl: data['store_url'] ?? 'https://play.google.com/store/apps/details?id=kr.heeblings.parent_helper',
+      showBottomBanner: data['show_bottom_banner'] ?? true,
     );
   }
 }

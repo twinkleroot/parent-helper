@@ -7,14 +7,19 @@ import '../utils/logger.dart';
 // 채널 객체를 클래스 변수로 분리하여 정의
 final AndroidNotificationChannel highImportanceChannel =
   AndroidNotificationChannel(
-    'pickup_channel_v6', // id (가장 중요)
-    '등하원 알림 (v6)', // name
+    'pickup_channel_v8', // id (가장 중요)
+    '등하원 알림 (v8)', // name
     description: '등하원 시간 알림 채널', // description
     importance: Importance.max,
     playSound: true,
-    sound: null,
+    // 커스텀 사운드 설정 (android/app/src/main/res/raw/alarm1.mp3 필요)
+    // 파일 확장자는 제외하고 이름만 입력합니다.
+    sound: const RawResourceAndroidNotificationSound('alarm1'),
     enableVibration: true,
-    vibrationPattern: null,
+    // 강력한 커스텀 진동 패턴 설정
+    // [대기, 진동, 대기, 진동, ...] 단위는 ms
+    // 0ms 대기 -> 2000ms(2초) 강한 진동 -> 500ms 대기 -> 2000ms(2초) 강한 진동
+    vibrationPattern: Int64List.fromList([0, 2000, 500, 2000, 500, 2000]),
     audioAttributesUsage: AudioAttributesUsage.alarm,
   );
 

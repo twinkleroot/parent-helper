@@ -74,7 +74,7 @@ class ScheduleListItem extends StatelessWidget {
                 // color: schedule.type == ScheduleType.pickup
                 //     ? Colors.green.shade200
                 //     : Colors.green.shade200,
-                color: Colors.green.shade700,
+                color: Colors.white,
               ),
             ),
             child: Column(
@@ -159,6 +159,8 @@ class ScheduleListItem extends StatelessWidget {
             scale: 0.9,
             child: Switch(
               value: schedule.isEnabled,
+              activeThumbColor: Theme.of(context).colorScheme.primary,
+              activeTrackColor: Theme.of(context).colorScheme.primaryContainer,
               onChanged: (value) async {
                 final dataRepository = context.read<DataRepository>();
                 final notificationService = context.read<NotificationService>();
