@@ -1,4 +1,5 @@
 // import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
@@ -26,9 +27,10 @@ void main() async {
   MobileAds.instance.initialize();
 
   // Firebase 초기화 (firebase_options.dart 사용)
-  await Firebase.initializeApp(
-    options: DefaultFirebaseOptions.currentPlatform,
-  );
+  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+
+  // (앱 실행 시 자동으로 데이터 수집 시작)
+  FirebaseAnalytics analytics = FirebaseAnalytics.instance;
 
   await GoogleSignIn.instance.initialize(
     serverClientId: dotenv.env['GOOGLE_LOGIN_WEB_CLIENT_ID'],
@@ -53,17 +55,20 @@ void main() async {
   runApp(MyApp(
     notificationService: notificationService,
     adService: AdService(),
+    analytics: analytics,
   ));
 }
 
 class MyApp extends StatelessWidget {
   final NotificationService notificationService;
   final AdService adService;
+  final FirebaseAnalytics analytics;
 
   const MyApp({
     super.key,
     required this.notificationService,
     required this.adService,
+    required this.analytics,
   });
 
   @override
@@ -119,6 +124,10 @@ class MyApp extends StatelessWidget {
           ),
           visualDensity: VisualDensity.adaptivePlatformDensity,
         ),
+        // 애널리틱스 옵저버 등록 (화면 전환 등 자동 추적)
+        navigatorObservers: [
+          FirebaseAnalyticsObserver(analytics: analytics),
+        ],
         home: const SplashScreen(),
       ),
     );
