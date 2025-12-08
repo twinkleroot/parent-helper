@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/user.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
+import '../../services/ad_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/data_repository.dart';
 import '../../services/notification_service.dart';
@@ -256,6 +257,10 @@ class ManagementTab extends StatelessWidget {
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       final dataRepository = Provider.of<DataRepository>(context, listen: false);
+      final adService = Provider.of<AdService>(context, listen: false);
+
+      // 로그인 화면으로 넘어갔다가 돌아올 때 광고가 뜨지 않도록 스킵 설정
+      adService.skipNextAppOpenAd();
 
       // 로그인 시도 (내부적으로 데이터 동기화 syncLocalDataToFirestore 실행됨)
       final user = await authService.signInWithGoogle();

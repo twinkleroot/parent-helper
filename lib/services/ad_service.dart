@@ -29,6 +29,9 @@ class AdService with WidgetsBindingObserver {
   // 전면 광고가 마지막으로 닫힌 시간 기록
   DateTime? _lastInterstitialDismissedTime;
 
+  // 다음 Warm Start 광고 스킵 여부 플래그
+  bool _shouldSkipNextWarmStart = false;
+
   bool get isBannerAdHomeLoaded => _bannerAdHome != null;
   bool get isBannerAdListLoaded => _bannerAdList != null;
   bool get isBannerAdWeeklyLoaded => _bannerAdWeekly != null;
@@ -59,10 +62,23 @@ class AdService with WidgetsBindingObserver {
     }
   }
 
+  // 구글 로그인 등 외부 창을 열 때 호출하여 광고 차단
+  void skipNextAppOpenAd() {
+    _shouldSkipNextWarmStart = true;
+    logger.i('다음 Warm Start 광고 스킵 예약됨');
+  }
+
   // Warm Start 시 50% 확률로 광고 표시 시도
   void _tryShowAdOnWarmStart() {
     // 웹이거나 이미 광고가 떠있으면 스킵
     if (kIsWeb || _isAppOpenAdShowing) return;
+
+    // 스킵 플래그 확인
+    if (_shouldSkipNextWarmStart) {
+      logger.i('🔥 Warm Start: 작업(로그인 등)으로 인해 광고 스킵');
+      _shouldSkipNextWarmStart = false; // 플래그 리셋
+      return;
+    }
 
     // 전면 광고가 닫힌 지 5초가 지나지 않았다면, 오프닝 광고를 띄우지 않음
     if (_lastInterstitialDismissedTime != null) {

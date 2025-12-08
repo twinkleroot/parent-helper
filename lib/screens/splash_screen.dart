@@ -4,8 +4,10 @@ import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../services/ad_service.dart';
+import '../services/data_repository.dart';
 import '../services/firestore_service.dart';
 import '../services/popup_service.dart';
+import '../services/notification_service.dart';
 import '../models/app_config.dart';
 import '../utils/logger.dart';
 import 'home_screen.dart';
@@ -62,8 +64,12 @@ class _SplashScreenState extends State<SplashScreen> {
       );
     }
 
-    // 설정 로드, 광고 로드, 최소 대기 시간 병렬 처리
-    final results = await Future.wait([configFuture, minWait, adWait]);
+    // 알림 동기화 (고아 알림 제거 및 재등록)
+    // 앱 시작 시 OS 알람과 DB 데이터를 일치시키는 중요한 작업
+    final resyncFuture = _resyncNotifications();
+
+    // 모든 비동기 작업 대기(설정 로드, 광고 로드, 최소 대기 시간 병렬 처리)
+    final results = await Future.wait([configFuture, minWait, adWait, resyncFuture]);
     _appConfig = results[0] as AppConfig; // 설정 저장
 
     // 2. 핵심 권한 확인 및 처리
@@ -77,6 +83,24 @@ class _SplashScreenState extends State<SplashScreen> {
       if (!isBlocked) {
         await _checkPermissionAndProceed();
       }
+    }
+  }
+
+  // 알림 동기화 로직 분리
+  Future<void> _resyncNotifications() async {
+    try {
+      final dataRepository = Provider.of<DataRepository>(context, listen: false);
+      final notificationService = Provider.of<NotificationService>(context, listen: false);
+
+      // 현재 유효한 스케줄 가져오기
+      // (DataRepository는 초기화 시 _refreshLocalData를 하므로 데이터가 준비됨)
+      final schedules = await dataRepository.getAllSchedules().first;
+
+      // 알림 서비스에 동기화 요청 (전체 취소 -> 재등록)
+      await notificationService.resyncNotifications(schedules);
+    } catch (e) {
+      logger.e('알림 동기화 실패: $e');
+      // 알림 동기화 실패가 앱 실행을 막지 않도록 예외 처리
     }
   }
 

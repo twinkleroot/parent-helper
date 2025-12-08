@@ -19,7 +19,7 @@ final AndroidNotificationChannel highImportanceChannel =
     // 강력한 커스텀 진동 패턴 설정
     // [대기, 진동, 대기, 진동, ...] 단위는 ms
     // 0ms 대기 -> 2000ms(2초) 강한 진동 -> 500ms 대기 -> 2000ms(2초) 강한 진동
-    vibrationPattern: Int64List.fromList([0, 2000, 500, 2000, 500, 2000]),
+    vibrationPattern: Int64List.fromList([0, 2000, 500, 2000, 500, 2000, 500, 2000, 500, 2000, 500]),
     audioAttributesUsage: AudioAttributesUsage.alarm,
   );
 
@@ -71,6 +71,22 @@ class NotificationService {
       badge: true,
       sound: true,
     );
+  }
+
+  // 알림 동기화: 기존 알림을 모두 지우고, 현재 유효한 일정만 다시 등록
+  Future<void> resyncNotifications(List<Schedule> activeSchedules) async {
+    logger.i('🔄 알림 동기화 시작: 기존 알림 초기화 후 ${activeSchedules.length}개 재등록');
+
+    // 1. 기존에 예약된 모든 알림(고아 알림 포함) 취소
+    await cancelAllNotifications();
+
+    // 2. 현재 유효한 일정만 다시 예약
+    for (var schedule in activeSchedules) {
+      if (schedule.isEnabled) {
+        await scheduleWeeklyNotification(schedule);
+      }
+    }
+    logger.i('✅ 알림 동기화 완료');
   }
 
   Future<void> cancelAllNotifications() async {
