@@ -1,25 +1,27 @@
 import 'dart:async'; // Timer를 위해 추가
 import 'package:flutter/material.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+// import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:parent_helper/services/data_repository.dart';
 import 'package:provider/provider.dart';
-import '../services/ad_service.dart';
+// import '../services/ad_service.dart';
 import '../services/auth_service.dart';
+import '../services/popup_service.dart';
+import '../services/purchase_service.dart';
 import '../screens/tabs/today_schedule_tab.dart';
 import '../screens/tabs/all_schedules_tab.dart';
 import '../screens/tabs/weekly_schedule_tab.dart';
 import '../screens/tabs/management_tab.dart';
 import '../models/user.dart';
-import '../services/popup_service.dart';
 import '../models/app_config.dart';
 
 // 홈 화면의 각 탭을 정의하는 클래스
 class HomeTab {
   final String title;
   final Widget widget;
-  final BannerAd? bannerAd;
+  // final BannerAd? bannerAd;
 
-  HomeTab({required this.title, required this.widget, this.bannerAd});
+  // HomeTab({required this.title, required this.widget, this.bannerAd});
+  HomeTab({required this.title, required this.widget});
 }
 
 class HomeScreen extends StatefulWidget {
@@ -63,28 +65,28 @@ class HomeScreenState extends State<HomeScreen> {
     // [중요] AppUser 상태 변경을 감지하여 위젯 리스트를 재생성
     // 이렇게 해야 로그인/로그아웃 시 탭들이 다시 빌드되면서 DataRepository의 변경된 상태를 반영함
     Provider.of<AppUser?>(context); // 리빌드 트리거
-    final adService = Provider.of<AdService>(context, listen: false);
+    // final adService = Provider.of<AdService>(context, listen: false);
 
     _widgetOptions = [
       HomeTab(
         title: '오늘 일정',
         widget: const TodayScheduleTab(),
-        bannerAd: adService.bannerAdHome,
+        // bannerAd: adService.bannerAdHome,
       ),
       HomeTab(
         title: '전체 일정',
         widget: const AllSchedulesTab(),
-        bannerAd: adService.bannerAdList,
+        // bannerAd: adService.bannerAdList,
       ),
       HomeTab(
         title: '주간 요약',
         widget: const WeeklyScheduleTab(),
-        bannerAd: adService.bannerAdWeekly,
+        // bannerAd: adService.bannerAdWeekly,
       ),
       HomeTab(
         title: '설정',
         widget: const ManagementTab(),
-        bannerAd: adService.bannerAdMgmt,
+        // bannerAd: adService.bannerAdMgmt,
       ),
     ];
   }
@@ -98,36 +100,36 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   void dispose() {
     // 홈 화면이 닫힐 때 배너 광고 리소스 해제
-    Provider.of<AdService>(context, listen: false).disposeBanners();
+    // Provider.of<AdService>(context, listen: false).disposeBanners();
     super.dispose();
   }
 
-  Widget _buildBannerAdWidget(BannerAd? bannerAd) {
-    // [추가] 1. Config가 아직 로드되지 않았거나,
-    // 2. DB 플래그(showBottomBanner)가 false이면 광고를 보여주지 않음
-    if (_appConfig == null || !_appConfig!.showBottomBanner) {
-      return const SizedBox.shrink(); // 아예 공간 차지 안 함
-    }
-
-    if (bannerAd == null) {
-      return const SizedBox(height: 50.0);
-    }
-
-    return Container(
-      alignment: Alignment.center,
-      width: AdSize.banner.width.toDouble(),
-      height: AdSize.banner.height.toDouble(),
-      child: AdWidget(
-        ad: bannerAd,
-        key: ValueKey('${bannerAd.adUnitId}_$_currentIndex'),
-      ),
-    );
-  }
+  // Widget _buildBannerAdWidget(BannerAd? bannerAd) {
+  //   // [추가] 1. Config가 아직 로드되지 않았거나,
+  //   // 2. DB 플래그(showBottomBanner)가 false이면 광고를 보여주지 않음
+  //   if (_appConfig == null || !_appConfig!.showBottomBanner) {
+  //     return const SizedBox.shrink(); // 아예 공간 차지 안 함
+  //   }
+  //
+  //   if (bannerAd == null) {
+  //     return const SizedBox(height: 50.0);
+  //   }
+  //
+  //   return Container(
+  //     alignment: Alignment.center,
+  //     width: AdSize.banner.width.toDouble(),
+  //     height: AdSize.banner.height.toDouble(),
+  //     child: AdWidget(
+  //       ad: bannerAd,
+  //       key: ValueKey('${bannerAd.adUnitId}_$_currentIndex'),
+  //     ),
+  //   );
+  // }
 
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context, listen: false);
-    final firestoreService = Provider.of<DataRepository>(context, listen: false);
+    // final firestoreService = Provider.of<DataRepository>(context, listen: false);
     final user = Provider.of<AppUser?>(context);  // 유저 상태 감지
 
     // _widgetOptions이 초기화되기 전이나 범위 밖일 경우 대비
@@ -179,7 +181,7 @@ class HomeScreenState extends State<HomeScreen> {
               children: _widgetOptions.map((e) => e.widget).toList(),
             ),
           ),
-          _buildBannerAdWidget(currentTab.bannerAd),
+          // _buildBannerAdWidget(currentTab.bannerAd),
         ],
       ),
       bottomNavigationBar: BottomNavigationBar(
@@ -209,23 +211,23 @@ class HomeScreenState extends State<HomeScreen> {
   }
 
   // 배너 광고를 담을 컨테이너 위젯
-  Widget _buildBannerContainer(BannerAd? bannerAd) {
-    // 광고가 null이거나 로드 실패 시, 빈 공간을 반환
-    if (bannerAd == null) {
-      return const SizedBox(height: 50.0); // 표준 배너 높이
-    }
-
-    return Container(
-      alignment: Alignment.center,
-      width: AdSize.banner.width.toDouble(),
-      height: bannerAd.size.height.toDouble(),
-      // color: Colors.grey[100], // 광고 로딩 중 배경색
-      child: AdWidget(
-        ad: bannerAd,
-        key: ValueKey('${bannerAd.adUnitId}_$_currentIndex'),
-      ),
-    );
-  }
+  // Widget _buildBannerContainer(BannerAd? bannerAd) {
+  //   // 광고가 null이거나 로드 실패 시, 빈 공간을 반환
+  //   if (bannerAd == null) {
+  //     return const SizedBox(height: 50.0); // 표준 배너 높이
+  //   }
+  //
+  //   return Container(
+  //     alignment: Alignment.center,
+  //     width: AdSize.banner.width.toDouble(),
+  //     height: bannerAd.size.height.toDouble(),
+  //     // color: Colors.grey[100], // 광고 로딩 중 배경색
+  //     child: AdWidget(
+  //       ad: bannerAd,
+  //       key: ValueKey('${bannerAd.adUnitId}_$_currentIndex'),
+  //     ),
+  //   );
+  // }
 }
 
 // 3초 후 자동 해제되는 다이얼로그 위젯

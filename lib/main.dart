@@ -6,17 +6,18 @@ import 'package:provider/provider.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:google_mobile_ads/google_mobile_ads.dart';
+// import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/date_symbol_data_local.dart'; // intl 초기화
 import 'firebase_options.dart';
 import 'models/user.dart'; // FirebaseAuth User를 간단히 사용
-import 'services/ad_service.dart';
+// import 'services/ad_service.dart';
 import 'services/auth_service.dart';
 import 'services/firestore_service.dart';
 import 'services/notification_service.dart';
 import 'screens/splash_screen.dart';
 import 'services/data_repository.dart';
+import 'services/purchase_service.dart';
 import 'utils/logger.dart';
 
 void main() async {
@@ -24,11 +25,11 @@ void main() async {
   // .env 파일 로드. 앱 시작 시 딱 한 번만 호출하면 됩니다.
   await dotenv.load(fileName: ".env");
 
-  MobileAds.instance.initialize();
+  // 25. 12. 15 광고 제거
+  // MobileAds.instance.initialize();
 
   // Firebase 초기화 (firebase_options.dart 사용)
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
   // (앱 실행 시 자동으로 데이터 수집 시작)
   FirebaseAnalytics analytics = FirebaseAnalytics.instance;
 
@@ -50,24 +51,28 @@ void main() async {
   // 알림 서비스 초기화
   final notificationService = NotificationService();
   await notificationService.init();
+  final purchaseService = PurchaseService();
 
   // 광고 서비스 생성
   runApp(MyApp(
     notificationService: notificationService,
-    adService: AdService(),
+    // adService: AdService(),
+    purchaseService: purchaseService,
     analytics: analytics,
   ));
 }
 
 class MyApp extends StatelessWidget {
   final NotificationService notificationService;
-  final AdService adService;
+  // final AdService adService;
+  final PurchaseService purchaseService;
   final FirebaseAnalytics analytics;
 
   const MyApp({
     super.key,
     required this.notificationService,
-    required this.adService,
+    // required this.adService,
+    required this.purchaseService,
     required this.analytics,
   });
 
@@ -75,9 +80,11 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        Provider<AdService>(create: (_) => adService),
+        // Provider<AdService>(create: (_) => adService),
         Provider<AuthService>(create: (_) => AuthService()),
         Provider<NotificationService>(create: (_) => notificationService),
+        // PurchaseService는 ChangeNotifierProvider로 제공 (상태 변경 감지)
+        ChangeNotifierProvider<PurchaseService>(create: (_) => purchaseService),
 
         // 유저 스트림 제공
         StreamProvider<AppUser?>(

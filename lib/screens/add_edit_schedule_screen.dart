@@ -3,7 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/schedule.dart';
 import '../models/child.dart';
 import '../models/institution.dart';
-import '../services/ad_service.dart';
+// import '../services/ad_service.dart';
 import '../services/data_repository.dart';
 import '../services/notification_service.dart';
 import '../widgets/day_of_week_selector.dart'; // 위젯 (생략)
@@ -76,7 +76,7 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
 
       final dataRepository = context.read<DataRepository>();
       final notificationService = context.read<NotificationService>();
-      final adService = context.read<AdService>();
+      // final adService = context.read<AdService>();
 
       Schedule schedule = Schedule(
         id: widget.scheduleToEdit?.id ?? '', // ID가 비어있으면 Firestore가 생성
@@ -138,7 +138,7 @@ class _AddEditScheduleScreenState extends State<AddEditScheduleScreen> {
 
           // 화면이 닫힌 후 전면 광고 표시 시도 (빈도 체크는 서비스 내부에서 함)
           // 화면 전환 중에 광고가 뜨면 자연스러움
-          await adService.checkAndShowInterstitialAd();
+          // await adService.checkAndShowInterstitialAd();
         }
       } catch (e) {
         logger.e('스케줄 저장 실패: $e');

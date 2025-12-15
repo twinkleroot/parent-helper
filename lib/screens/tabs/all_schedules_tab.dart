@@ -5,6 +5,7 @@ import '../../models/child.dart';
 import '../../models/institution.dart';
 import '../../models/schedule.dart';
 import '../../models/user.dart';
+import '../../services/purchase_service.dart';
 import '../../widgets/schedule_list_item.dart';
 import '../add_edit_schedule_screen.dart';
 import '../home_screen.dart'; // HomeScreenState
@@ -24,6 +25,9 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
 
   // 일정 추가 버튼 핸들러
   Future<void> _onAddSchedulePressed(DataRepository dataRepository) async {
+    // 일정 추가 전 제한 체크
+    final purchaseService = Provider.of<PurchaseService>(context, listen: false);
+    final schedules = await dataRepository.getAllSchedules().first;
     final children = await dataRepository.getChildren().first;
     final institutions = await dataRepository.getInstitutions().first;
 
@@ -32,29 +36,77 @@ class _AllSchedulesTabState extends State<AllSchedulesTab> {
     if (children.isEmpty || institutions.isEmpty) {
       showDialog(
         context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('안내'),
-          content: const Text('일정을 등록하려면 먼저 자녀와 기관을 1개 이상 등록해야 합니다.'),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(ctx);
-                // 설정 탭으로 이동
-                final homeState = context.findAncestorStateOfType<HomeScreenState>();
-                homeState?.onItemTapped(2);
-              },
-              child: const Text('설정으로 이동'),
+        builder: (ctx) =>
+            AlertDialog(
+              title: const Text('안내'),
+              content: const Text('일정을 등록하려면 먼저 자녀와 기관을 1개 이상 등록해야 합니다.'),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    // 설정 탭으로 이동
+                    final homeState = context.findAncestorStateOfType<
+                        HomeScreenState>();
+                    homeState?.onItemTapped(2);
+                  },
+                  child: const Text('설정으로 이동'),
+                ),
+              ],
             ),
+      );
+      return;
+    }
+
+    // 2. 일정 개수 제한 체크 (무료: 2개)
+    if (!purchaseService.isPremium && schedules.length >= 2) {
+      _showPremiumDialog(context, '일정은 2개까지만 등록 가능합니다.\n프리미엄으로 업그레이드하고 제한 없이 이용하세요!');
+      return;
+    }
+
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const AddEditScheduleScreen(),
+      ),
+    );
+  }
+
+  // [추가] 프리미엄 다이얼로그 (ManagementTab과 동일한 로직, 재사용하거나 별도 위젯으로 분리 가능)
+  void _showPremiumDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.star, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('프리미엄 업그레이드'),
           ],
         ),
-      );
-    } else {
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const AddEditScheduleScreen(),
+        content: Text(
+          '$message\n\n'
+              '✨ 프리미엄 혜택:\n'
+              '• 자녀, 기관, 일정 무제한 등록',
+          style: const TextStyle(height: 1.5),
         ),
-      );
-    }
+        actions: [
+          TextButton(
+            child: const Text('나중에'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              Provider.of<PurchaseService>(context, listen: false).buyPremium();
+            },
+            child: const Text('지금 업그레이드'),
+          ),
+        ],
+      ),
+    );
   }
 
   @override

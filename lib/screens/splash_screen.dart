@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // SystemNavigator.pop()을 위해 추가
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:shared_preferences/shared_preferences.dart';
-import '../services/ad_service.dart';
+// import 'package:shared_preferences/shared_preferences.dart';
+// import '../services/ad_service.dart';
 import '../services/data_repository.dart';
 import '../services/firestore_service.dart';
 import '../services/popup_service.dart';
@@ -32,44 +32,45 @@ class _SplashScreenState extends State<SplashScreen> {
   // 광고 로드와 권한 확인 로직 분리
   Future<void> _initializeApp() async {
     // 1. SharedPreferences로 첫 실행 여부 확인
-    final prefs = await SharedPreferences.getInstance();
-    final bool isFirstRun = prefs.getBool('is_first_run') ?? true;
+    // final prefs = await SharedPreferences.getInstance();
+    // final bool isFirstRun = prefs.getBool('is_first_run') ?? true;
 
     // FirestoreService 초기화 (uid는 아직 없으므로 null)
     final firestoreService = FirestoreService(uid: null);
     // AppConfig 로드
     final configFuture = firestoreService.getAppConfig();
-    final adService = Provider.of<AdService>(context, listen: false);
+    // final adService = Provider.of<AdService>(context, listen: false);
     // 최소 대기 시간 (1.5초)
     final minWait = Future.delayed(const Duration(milliseconds: 1500));
 
-    Future<void> adWait;
-    if (isFirstRun) {
-      // [첫 실행인 경우]
-      logger.i('앱 첫 실행입니다. 광고 로드를 건너뜁니다.');
-
-      // 첫 실행 플래그를 false로 변경하여 저장
-      await prefs.setBool('is_first_run', false);
-      adWait = Future.value(); // 즉시 완료
-      // 광고 없이 바로 권한 확인으로 이동
-    } else {
-      // 광고 로드 대기 (최대 3초)
-      // 3초가 지나면 TimeoutException 대신 onTimeout이 실행되어 바로 리턴합니다.
-      adWait = adService.preloadAds().timeout(
-        const Duration(seconds: 3),
-        onTimeout: () {
-          logger.w('⏳ 광고 로드 시간 초과 (3초). 다음 화면으로 이동합니다.');
-          return;
-        },
-      );
-    }
+    // Future<void> adWait;
+    // if (isFirstRun) {
+    //   // [첫 실행인 경우]
+    //   logger.i('앱 첫 실행입니다. 광고 로드를 건너뜁니다.');
+    //
+    //   // 첫 실행 플래그를 false로 변경하여 저장
+    //   await prefs.setBool('is_first_run', false);
+    //   adWait = Future.value(); // 즉시 완료
+    //   // 광고 없이 바로 권한 확인으로 이동
+    // } else {
+    //   // 광고 로드 대기 (최대 3초)
+    //   // 3초가 지나면 TimeoutException 대신 onTimeout이 실행되어 바로 리턴합니다.
+    //   adWait = adService.preloadAds().timeout(
+    //     const Duration(seconds: 3),
+    //     onTimeout: () {
+    //       logger.w('⏳ 광고 로드 시간 초과 (3초). 다음 화면으로 이동합니다.');
+    //       return;
+    //     },
+    //   );
+    // }
 
     // 알림 동기화 (고아 알림 제거 및 재등록)
     // 앱 시작 시 OS 알람과 DB 데이터를 일치시키는 중요한 작업
     final resyncFuture = _resyncNotifications();
 
     // 모든 비동기 작업 대기(설정 로드, 광고 로드, 최소 대기 시간 병렬 처리)
-    final results = await Future.wait([configFuture, minWait, adWait, resyncFuture]);
+    // final results = await Future.wait([configFuture, minWait, adWait, resyncFuture]);
+    final results = await Future.wait([configFuture, minWait, resyncFuture]);
     _appConfig = results[0] as AppConfig; // 설정 저장
 
     // 2. 핵심 권한 확인 및 처리
@@ -111,7 +112,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
     if (status.isGranted) {
       // 2. 권한이 이미 있으면 광고 표시 및 홈으로 이동
-      _showAdAndNavigate();
+      // _showAdAndNavigate();
+      _navigateToHome();
     } else {
       // 3. 권한이 없으면 사용자에게 설정 요청 다이얼로그 표시
       _showPermissionDialog();
@@ -147,7 +149,8 @@ class _SplashScreenState extends State<SplashScreen> {
 
               // 사용자가 설정 페이지에서 돌아왔을 때 다시 확인
               if (status.isGranted) {
-                _showAdAndNavigate();
+                _navigateToHome();
+                // _showAdAndNavigate();
               } else {
                 // 사용자가 여전히 거부하면 다시 다이얼로그 표시
                 _checkPermissionAndProceed();
@@ -161,15 +164,15 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   // 광고 표시 및 네비게이션 로직
-  void _showAdAndNavigate() {
-    if (!mounted) return;
-    final adService = Provider.of<AdService>(context, listen: false);
-
-    // 광고가 로드되어 있으면 표시하고, 아니면(첫 실행 포함) 바로 이동
-    adService.showAppOpenAdIfAvailable(
-      onAdDismissed: _navigateToHome,
-    );
-  }
+  // void _showAdAndNavigate() {
+  //   if (!mounted) return;
+  //   final adService = Provider.of<AdService>(context, listen: false);
+  //
+  //   // 광고가 로드되어 있으면 표시하고, 아니면(첫 실행 포함) 바로 이동
+  //   adService.showAppOpenAdIfAvailable(
+  //     onAdDismissed: _navigateToHome,
+  //   );
+  // }
 
   void _navigateToHome() {
     if (mounted) {

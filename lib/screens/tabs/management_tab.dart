@@ -6,10 +6,11 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../models/user.dart';
 import '../../models/child.dart';
 import '../../models/institution.dart';
-import '../../services/ad_service.dart';
+// import '../../services/ad_service.dart';
 import '../../services/auth_service.dart';
 import '../../services/data_repository.dart';
 import '../../services/notification_service.dart';
+import '../../services/purchase_service.dart';
 import '../../utils/logger.dart';
 import '../../widgets/user_guide_dialog.dart';
 
@@ -69,7 +70,7 @@ class ManagementTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final firestoreService = Provider.of<DataRepository>(context, listen: false);
+    final dataRepository = Provider.of<DataRepository>(context, listen: false);
 
     return ListView(
       padding: const EdgeInsets.all(16.0),
@@ -78,12 +79,21 @@ class ManagementTab extends StatelessWidget {
         _buildSectionHeader(
           context,
           title: '나의 자녀',
-          onAdd: () {
-            // 자녀 추가 화면/다이얼로그 표시
-            _showAddEditChildDialog(context, firestoreService, childToEdit: null);
+          onAdd: () async {
+            // 자녀 추가 전 제한 체크
+            final purchaseService = Provider.of<PurchaseService>(context, listen: false);
+            final children = await dataRepository.getChildren().first;
+
+            // 프리미엄이 아니고, 자녀가 1명 이상이면 제한 (무료: 1명)
+            if (!purchaseService.isPremium && children.isNotEmpty) {
+              _showPremiumDialog(context, '무료버전은 자녀 1명만 등록 가능합니다.\n프리미엄으로 업그레이드하여 제한 없이 이용해보세요!');
+            } else {
+              // 자녀 추가 화면/다이얼로그 표시
+              _showAddEditChildDialog(context, dataRepository);
+            }
           },
         ),
-        _buildChildList(context, firestoreService),
+        _buildChildList(context, dataRepository),
 
         const SizedBox(height: 24),
 
@@ -91,12 +101,19 @@ class ManagementTab extends StatelessWidget {
         _buildSectionHeader(
           context,
           title: '기관 관리 (학교, 학원, 유치원 등)',
-          onAdd: () {
-            // 기관 추가 다이얼로그 표시
-            _showAddEditInstitutionDialog(context, firestoreService, institutionToEdit: null);
+          onAdd: () async {
+            final purchaseService = Provider.of<PurchaseService>(context, listen: false);
+            final institutions = await dataRepository.getInstitutions().first;
+
+            // 프리미엄이 아니고, 기관이 2개 이상이면 제한 (무료: 2개)
+            if (!purchaseService.isPremium && institutions.length >= 2) {
+              _showPremiumDialog(context, '기관은 2개까지만 등록 가능합니다.\n프리미엄으로 업그레이드하고 모든 기관을 관리하세요!');
+            } else {
+              _showAddEditInstitutionDialog(context, dataRepository);
+            }
           },
         ),
-        _buildInstitutionList(context, firestoreService),
+        _buildInstitutionList(context, dataRepository),
 
         const SizedBox(height: 24),
         const Divider(),
@@ -126,6 +143,27 @@ class ManagementTab extends StatelessWidget {
             },
           ),
         ),
+
+        // const SizedBox(height: 16),
+
+        // 프리미엄 구매 상태 확인용 (선택 사항)
+        Consumer<PurchaseService>(
+          builder: (context, purchaseService, child) {
+            if (purchaseService.isPremium) {
+              return const Card(
+                color: Colors.amberAccent,
+                child: ListTile(
+                  leading: Icon(Icons.star, color: Colors.deepOrange),
+                  title: Text('프리미엄 사용자', style: TextStyle(fontWeight: FontWeight.bold)),
+                  subtitle: Text('모든 기능을 제한 없이 사용 중입니다.\n 구매해주셔서 감사합니다!'),
+                ),
+              );
+            }
+            return const SizedBox.shrink();
+          },
+        ),
+
+        // const SizedBox(height: 16),
 
         // --- 배터리 최적화 안내 카드 ---
         Card(
@@ -167,6 +205,46 @@ class ManagementTab extends StatelessWidget {
           ),
         ),
       ],
+    );
+  }
+
+  // [추가] 프리미엄 결제 유도 다이얼로그
+  void _showPremiumDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.star, color: Colors.amber),
+            SizedBox(width: 8),
+            Text('프리미엄 업그레이드'),
+          ],
+        ),
+        content: Text(
+          '$message\n\n'
+              '✨ 프리미엄 혜택:\n'
+              '• 자녀, 기관, 일정 무제한 등록',
+          style: const TextStyle(height: 1.5),
+        ),
+        actions: [
+          TextButton(
+            child: const Text('나중에'),
+            onPressed: () => Navigator.pop(ctx),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber,
+              foregroundColor: Colors.black,
+            ),
+            onPressed: () {
+              Navigator.pop(ctx);
+              // 결제 프로세스 시작
+              Provider.of<PurchaseService>(context, listen: false).buyPremium();
+            },
+            child: const Text('지금 업그레이드'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -257,10 +335,10 @@ class ManagementTab extends StatelessWidget {
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       final dataRepository = Provider.of<DataRepository>(context, listen: false);
-      final adService = Provider.of<AdService>(context, listen: false);
+      // final adService = Provider.of<AdService>(context, listen: false);
 
       // 로그인 화면으로 넘어갔다가 돌아올 때 광고가 뜨지 않도록 스킵 설정
-      adService.skipNextAppOpenAd();
+      // adService.skipNextAppOpenAd();
 
       // 로그인 시도 (내부적으로 데이터 동기화 syncLocalDataToFirestore 실행됨)
       final user = await authService.signInWithGoogle();

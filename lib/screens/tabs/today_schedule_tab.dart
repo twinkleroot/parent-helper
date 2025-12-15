@@ -39,7 +39,7 @@ class _TodayScheduleTabState extends State<TodayScheduleTab> {
                 Navigator.pop(ctx);
                 // 설정 탭(index 2)으로 이동
                 final homeState = context.findAncestorStateOfType<HomeScreenState>();
-                homeState?.onItemTapped(2);
+                homeState?.onItemTapped(3);
               },
               child: const Text('설정으로 이동'),
             ),

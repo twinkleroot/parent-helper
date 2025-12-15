@@ -51,7 +51,7 @@ class AppConfig {
       noticeTitle: data['notice_title'] ?? '공지사항',
       noticeContent: data['notice_content'] ?? '',
       storeUrl: data['store_url'] ?? 'https://play.google.com/store/apps/details?id=kr.heeblings.parent_helper',
-      showBottomBanner: data['show_bottom_banner'] ?? true,
+      showBottomBanner: data['show_bottom_banner'] ?? false,
     );
   }
 }

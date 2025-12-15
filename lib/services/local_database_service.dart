@@ -1,3 +1,4 @@
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'package:uuid/uuid.dart';
@@ -23,7 +24,7 @@ class LocalDatabaseService {
     String path = join(await getDatabasesPath(), 'pickup_pal_local.db');
     return await openDatabase(
       path,
-      version: 2,
+      version: 4,
       onCreate: (db, version) async {
         await db.execute('''
           CREATE TABLE children(
@@ -57,6 +58,14 @@ class LocalDatabaseService {
       },
       // 기존 사용자(버전 1)를 위한 업그레이드 로직
       onUpgrade: (db, oldVersion, newVersion) async {
+        // [중요] 기존 사용자(업데이트 유저) 감지 로직
+        // 버전 4 미만(즉, 이번 업데이트 이전)에서 업데이트하는 경우
+        if (oldVersion < 4) {
+          final prefs = await SharedPreferences.getInstance();
+          // "이 사용자는 기존 사용자입니다"라는 플래그 저장
+          await prefs.setBool('is_legacy_user_grant_pending', true);
+        }
+
         if (oldVersion < 2) {
           // institutions 테이블에 memo 컬럼 추가
           await db.execute('ALTER TABLE institutions ADD COLUMN memo TEXT');
