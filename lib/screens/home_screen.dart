@@ -1,9 +1,12 @@
 import 'dart:async'; // Timer를 위해 추가
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 // import 'package:google_mobile_ads/google_mobile_ads.dart';
 import 'package:parent_helper/services/data_repository.dart';
 import 'package:provider/provider.dart';
+import 'package:share_plus/share_plus.dart';
 // import '../services/ad_service.dart';
+import '../models/schedule.dart';
 import '../services/auth_service.dart';
 import '../services/popup_service.dart';
 import '../services/purchase_service.dart';
@@ -13,6 +16,7 @@ import '../screens/tabs/weekly_schedule_tab.dart';
 import '../screens/tabs/management_tab.dart';
 import '../models/user.dart';
 import '../models/app_config.dart';
+import '../widgets/premium_dialog.dart';
 
 // 홈 화면의 각 탭을 정의하는 클래스
 class HomeTab {
@@ -37,6 +41,62 @@ class HomeScreenState extends State<HomeScreen> {
   // 앱 설정 상태
   AppConfig? _appConfig;
 
+  Future<void> _shareTodaySchedule(BuildContext context) async {
+    final purchaseService = Provider.of<PurchaseService>(context, listen: false);
+
+    if (!purchaseService.isPremium) {
+      showPremiumDialog(context, message: "일정 공유는 프리미엄 기능입니다.\n카카오톡 등으로 가족에게 오늘의 일정을 손쉽게 공유해보세요!");
+      return;
+    }
+
+    final dataRepository = Provider.of<DataRepository>(context, listen: false);
+    final allSchedules = await dataRepository.getAllSchedules().first;
+
+    final todayWeekday = DateTime.now().weekday;
+    final todaySchedules = allSchedules.where((s) {
+      return s.daysOfWeek.contains(todayWeekday);
+    }).toList();
+
+    if (todaySchedules.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('공유할 일정이 없습니다.')),
+        );
+      }
+      return;
+    }
+
+    todaySchedules.sort((a, b) {
+      int timeA = a.time.hour * 60 + a.time.minute;
+      int timeB = b.time.hour * 60 + b.time.minute;
+      return (timeA != timeB) ? timeA.compareTo(timeB) : a.childName.compareTo(b.childName);
+    });
+
+    final now = DateTime.now();
+    final dateStr = DateFormat('M월 d일 (E)', 'ko_KR').format(now);
+    StringBuffer sb = StringBuffer();
+    sb.writeln('📅 [등하원 알리미]');
+    sb.writeln(' $dateStr 픽업 일정');
+    sb.writeln('');
+    sb.writeln('--------------------');
+
+    for (var s in todaySchedules) {
+      final dt = DateTime(now.year, now.month, now.day, s.time.hour, s.time.minute);
+      final timeStr = DateFormat('a h:mm', 'ko_KR').format(dt);
+      final typeStr = s.type == ScheduleType.pickup ? '(등원)' : '(하원)';
+
+      sb.writeln(timeStr);
+      sb.writeln(s.childName);
+      sb.writeln('${s.institutionName} $typeStr');
+      if (s.memo.isNotEmpty) sb.writeln('└ ${s.memo}');
+      sb.writeln('--------------------');
+    }
+    sb.writeln('');
+    sb.writeln('오늘도 화이팅하세요! 💪');
+
+    await Share.share(sb.toString());
+  }
+
   @override
   void initState() {
     super.initState();
@@ -56,6 +116,7 @@ class HomeScreenState extends State<HomeScreen> {
         _appConfig = config; // 설정 저장 (광고 표시에 사용)
       });
       await popupService.checkNoticesAndGuide(context, config);
+      await popupService.checkReviewPopup(context, config); // 앱 실행 횟수 체크 및 리뷰 팝업 호출
     }
   }
 
@@ -129,6 +190,7 @@ class HomeScreenState extends State<HomeScreen> {
   @override
   Widget build(BuildContext context) {
     final authService = Provider.of<AuthService>(context, listen: false);
+
     // final firestoreService = Provider.of<DataRepository>(context, listen: false);
     final user = Provider.of<AppUser?>(context);  // 유저 상태 감지
 
@@ -137,11 +199,39 @@ class HomeScreenState extends State<HomeScreen> {
       _currentIndex = 0;
     }
     final currentTab = _widgetOptions[_currentIndex];
+    // [수정] 프리미엄 상태를 실시간으로 구독합니다.
+    final purchaseService = Provider.of<PurchaseService>(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: Text(currentTab.title),
+        title: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(currentTab.title),
+            if (purchaseService.isPremium && _currentIndex < 3) ...[
+              const SizedBox(width: 6),
+              const Icon(Icons.workspace_premium, color: Colors.amber, size: 24),
+            ],
+          ],
+        ),
         actions: [
+          if (_currentIndex == 0)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 4.0),
+              child: OutlinedButton(
+                onPressed: () => _shareTodaySchedule(context),
+                style: OutlinedButton.styleFrom(
+                  side: BorderSide(color: Theme.of(context).colorScheme.primary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8.0),
+                  ),
+                ),
+                child: const Text(
+                  '오늘 픽업 일정 공유',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
           // 로그인 상태일 때만 로그아웃 버튼 표시
           if (user != null)
             IconButton(

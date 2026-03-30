@@ -41,7 +41,7 @@ class _SplashScreenState extends State<SplashScreen> {
     final configFuture = firestoreService.getAppConfig();
     // final adService = Provider.of<AdService>(context, listen: false);
     // 최소 대기 시간 (1.5초)
-    final minWait = Future.delayed(const Duration(milliseconds: 1500));
+    final minWait = Future.delayed(const Duration(milliseconds: 100));
 
     // Future<void> adWait;
     // if (isFirstRun) {

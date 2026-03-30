@@ -227,7 +227,7 @@ class FirestoreService {
 
   // --- 스케줄 (Schedule) CRUD ---
   // 스케줄 목록 실시간 스트림
-  Stream<List<Schedule>> getSchedules() {
+  Stream<List<Schedule>> getAllSchedules() {
     if (uid == null) return Stream.value([]);
     // 참고: orderBy를 사용하려면 Firestore 콘솔에서 색인을 생성해야 할 수 있습니다.
     // 여기서는 클라이언트 측에서 정렬합니다.

@@ -167,6 +167,73 @@ class PopupService {
     }
   }
 
+  Future<void> checkReviewPopup(BuildContext context, AppConfig config) async {
+    final prefs = await SharedPreferences.getInstance();
+
+    // 이미 리뷰를 남겼거나 '다시 보지 않기'를 누른 경우 패스
+    bool hasReviewed = prefs.getBool('has_reviewed') ?? false;
+    if (hasReviewed) return;
+
+    // 실행 횟수 증가 및 저장
+    int launchCount = prefs.getInt('app_launch_count') ?? 0;
+    launchCount++;
+    await prefs.setInt('app_launch_count', launchCount);
+
+    logger.i('앱 실행 횟수 카운트: $launchCount');
+
+    // 10회 실행될 때마다 팝업 표시
+    if (launchCount > 0 && launchCount % 10 == 0) {
+      if (!context.mounted) return;
+
+      await showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Row(
+            children: [
+              Icon(Icons.star, color: Colors.amber),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text('앱이 마음에 드시나요?', style: TextStyle(fontSize: 18)),
+              ),
+            ],
+          ),
+          content: const Text(
+              '등하원 알리미를 꾸준히 사용해 주셔서 정말 감사합니다!\n\n'
+                  '1분만 시간을 내어 따뜻한 리뷰와 별점을 남겨주시면, '
+                  '개발자에게 정말 큰 힘이 됩니다. 🥺💛'
+          ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                await prefs.setBool('has_reviewed', true); // 다시 보지 않기
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('다시 보지 않기', style: TextStyle(color: Colors.grey)),
+            ),
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx); // 나중에 (다음 10회째에 다시 뜸)
+              },
+              child: const Text('나중에'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.amber.shade100,
+                foregroundColor: Colors.black87,
+              ),
+              onPressed: () async {
+                await prefs.setBool('has_reviewed', true); // 스토어로 이동하면 리뷰 작성한 것으로 간주
+                _launchStore(config.storeUrl);
+                if (ctx.mounted) Navigator.pop(ctx);
+              },
+              child: const Text('⭐️ 리뷰 작성하기'),
+            ),
+          ],
+        ),
+      );
+    }
+  }
+
   void _launchStore(String url) async {
     final uri = Uri.parse(url);
     if (await canLaunchUrl(uri)) {

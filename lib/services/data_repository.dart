@@ -8,11 +8,15 @@ import '../models/app_config.dart';
 import '../models/user.dart';
 import 'firestore_service.dart';
 import 'local_database_service.dart';
+import 'widget_service.dart';
+import 'purchase_service.dart';
 
 class DataRepository {
   FirestoreService _firestoreService;
   final LocalDatabaseService _localDb;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final WidgetService _widgetService = WidgetService();
+  final PurchaseService? _purchaseService;
 
   // 로컬 데이터 변경사항을 즉시 반영하기 위한 Subject
   // 초기값으로 빈 리스트를 넣어둡니다.
@@ -20,12 +24,12 @@ class DataRepository {
   final BehaviorSubject<List<Child>> _localChildrenSubject = BehaviorSubject<List<Child>>.seeded([]);
   final BehaviorSubject<List<Institution>> _localInstitutionsSubject = BehaviorSubject<List<Institution>>.seeded([]);
 
-  DataRepository()
+  DataRepository({PurchaseService? purchaseService})
       : _firestoreService = FirestoreService(uid: FirebaseAuth.instance.currentUser?.uid),
-        _localDb = LocalDatabaseService() {
-    // 초기 로컬 데이터 로드
-    _refreshLocalData();
-  }
+        _localDb = LocalDatabaseService(),
+        _purchaseService = purchaseService {
+          _refreshLocalData();
+        }
 
   // 현재 로그인 여부 확인
   bool get isLogged => _auth.currentUser != null;
@@ -36,14 +40,49 @@ class DataRepository {
     // 로그인 상태가 바뀌면 로컬 데이터도 다시 한번 리프레시 (비로그인 전환 시 필요)
     if (user == null) {
       _refreshLocalData();
+    } else {
+      _updateWidgetInfo(); // [수정] 조건 없이 항상 위젯 업데이트
     }
+  }
+
+  // 프리미엄 유저라면 위젯 업데이트
+  Future<void> _updateWidgetIfPremium() async {
+    // 주의: PurchaseService가 Provider로 주입되지 않고 main에서 생성되므로
+    // 여기서는 DataRepository가 생성될 때 주입받거나, 필요한 시점에 context로 접근해야 함.
+    // 여기서는 _purchaseService가 주입되었다고 가정하고 로직 구현.
+    // 만약 null이라면 위젯 업데이트를 건너뛰거나, 항상 업데이트하되 위젯 쪽에서 프리미엄 체크.
+    // (간편한 구현을 위해 여기서는 항상 업데이트를 시도합니다.
+    // 위젯은 앱의 "얼굴"이므로 무료 유저에게도 "프리미엄 전용" 문구를 띄우는 식으로 마케팅 활용 가능)
+
+    // 현재 모든 스케줄 가져오기
+    List<Schedule> schedules = [];
+    if (isLogged) {
+      schedules = await _firestoreService.getAllSchedules().first;
+    } else {
+      schedules = await _localDb.getAllSchedules();
+    }
+    await _widgetService.updateWidget(schedules);
+  }
+
+  // [수정] 누구나 위젯을 사용할 수 있도록 조건 없는 업데이트 함수로 변경
+  Future<void> _updateWidgetInfo() async {
+    List<Schedule> schedules = [];
+    if (isLogged) {
+      schedules = await _firestoreService.getAllSchedules().first;
+    } else {
+      schedules = await _localDb.getAllSchedules();
+    }
+    await _widgetService.updateWidget(schedules);
   }
 
   // 로컬 데이터 새로고침 (CRUD 후 호출)
   Future<void> _refreshLocalData() async {
-    _localSchedulesSubject.add(await _localDb.getAllSchedules());
+    final schedules = await _localDb.getAllSchedules();
+    _localSchedulesSubject.add(schedules);
     _localChildrenSubject.add(await _localDb.getChildren());
     _localInstitutionsSubject.add(await _localDb.getInstitutions());
+
+    _updateWidgetInfo(); // [수정] 데이터 로드 완료 시 위젯 갱신
   }
 
   // --- AppConfig (항상 Firestore에서 가져옴 - 공지사항 등) ---
@@ -57,7 +96,7 @@ class DataRepository {
 
   Stream<List<Schedule>> getAllSchedules() {
     if (isLogged) {
-      return _firestoreService.getSchedules();
+      return _firestoreService.getAllSchedules();
     } else {
       // 로컬일 때는 BehaviorSubject를 반환하여 실시간성을 확보
       return _localSchedulesSubject.stream;
@@ -68,33 +107,36 @@ class DataRepository {
   // 데이터 변경 후 UI를 갱신하는 트리거가 필요합니다.
   // 여기서는 간단히 'Future -> Stream' 변환만 제공하고,
   // UI에서는 setState로 다시 빌드되도록 유도하겠습니다.
-
   Future<String> addSchedule(Schedule schedule) async {
+    String id;
     if (isLogged) {
       final ref = await FirestoreService(uid: _auth.currentUser!.uid).addSchedule(schedule);
-      return ref.id;
+      id = ref.id;
+      _updateWidgetInfo(); // [수정]
     } else {
-      final id = await _localDb.addSchedule(schedule);
-      _refreshLocalData(); // [추가] 데이터 갱신
-      return id;
+      id = await _localDb.addSchedule(schedule);
+      _refreshLocalData(); // 내부에서 _updateWidgetInfo 호출됨ㅈ
     }
+    return id;
   }
 
   Future<void> updateSchedule(Schedule schedule) async {
     if (isLogged) {
       await FirestoreService(uid: _auth.currentUser!.uid).updateSchedule(schedule);
+      _updateWidgetIfPremium();
     } else {
       await _localDb.updateSchedule(schedule);
-      _refreshLocalData(); // [추가]
+      _refreshLocalData();
     }
   }
 
   Future<void> deleteSchedule(String id) async {
     if (isLogged) {
       await FirestoreService(uid: _auth.currentUser!.uid).deleteSchedule(id);
+      _updateWidgetIfPremium();
     } else {
       await _localDb.deleteSchedule(id);
-      _refreshLocalData(); // [추가]
+      _refreshLocalData();
     }
   }
 
@@ -119,6 +161,7 @@ class DataRepository {
   Future<void> updateChild(Child child) async {
     if (isLogged) {
       await FirestoreService(uid: _auth.currentUser!.uid).updateChild(child);
+      _updateWidgetIfPremium();
     } else {
       await _localDb.updateChild(child);
       _refreshLocalData();
@@ -128,6 +171,7 @@ class DataRepository {
   Future<void> deleteChild(String id) async {
     if (isLogged) {
       await FirestoreService(uid: _auth.currentUser!.uid).deleteChild(id);
+      _updateWidgetIfPremium();
     } else {
       await _localDb.deleteChild(id);
       _refreshLocalData();
@@ -155,6 +199,7 @@ class DataRepository {
   Future<void> updateInstitution(Institution inst) async {
     if (isLogged) {
       await FirestoreService(uid: _auth.currentUser!.uid).updateInstitution(inst);
+      _updateWidgetIfPremium();
     } else {
       await _localDb.updateInstitution(inst);
       _refreshLocalData();
@@ -164,13 +209,14 @@ class DataRepository {
   Future<void> deleteInstitution(String id) async {
     if (isLogged) {
       await FirestoreService(uid: _auth.currentUser!.uid).deleteInstitution(id);
+      _updateWidgetIfPremium();
     } else {
       await _localDb.deleteInstitution(id);
       _refreshLocalData();
     }
   }
 
-  // [!!] 데이터 동기화 (로컬 -> 파이어스토어)
+  // 데이터 동기화 (로컬 -> 파이어스토어)
   Future<void> syncLocalDataToFirestore(String uid) async {
     final firestore = FirestoreService(uid: uid);
 
@@ -227,6 +273,9 @@ class DataRepository {
     // 3. 로컬 데이터 삭제
     // await _localDb.clearAllData();
     // _refreshLocalData();
+
+    // 동기화 완료 후 위젯 갱신
+    _updateWidgetIfPremium();
   }
 
   Future<void> deleteAllUserData() async {
@@ -236,5 +285,8 @@ class DataRepository {
       await _localDb.clearAllData();
       _refreshLocalData();
     }
+
+    // 데이터 삭제 후 위젯 갱신 (빈 상태로)
+    _updateWidgetIfPremium();
   }
 }
