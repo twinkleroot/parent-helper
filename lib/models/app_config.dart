@@ -20,6 +20,7 @@ class AppConfig {
 
   // 하단 배너 광고 표시 여부
   final bool showBottomBanner;
+  final String premiumProductId;
 
   AppConfig({
     required this.latestVersion,
@@ -34,6 +35,7 @@ class AppConfig {
     this.noticeContent = '',
     this.storeUrl = '',
     this.showBottomBanner = true, // 기본값 true
+    this.premiumProductId = 'premium_upgrade', // 기본값
   });
 
   factory AppConfig.fromFirestore(DocumentSnapshot doc) {
@@ -52,6 +54,8 @@ class AppConfig {
       noticeContent: data['notice_content'] ?? '',
       storeUrl: data['store_url'] ?? 'https://play.google.com/store/apps/details?id=kr.heeblings.parent_helper',
       showBottomBanner: data['show_bottom_banner'] ?? false,
+      // [추가] DB에 값이 없으면 기존 ID를 기본으로 사용
+      premiumProductId: data['premiumProductId'] ?? 'premium_upgrade',
     );
   }
 }

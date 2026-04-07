@@ -254,8 +254,22 @@ class HomeScreenState extends State<HomeScreen> {
                 ) ?? false;
 
                 if (confirm) {
+                  // 로그아웃 진행 중 로딩 인디케이터 표시
+                  if (context.mounted) {
+                    showDialog(
+                      context: context,
+                      barrierDismissible: false,
+                      builder: (ctx) => const Center(child: CircularProgressIndicator()),
+                    );
+                  }
+
                   await authService.signOut();
                   // 로그아웃 후 DataRepository가 자동으로 로컬 모드로 전환됨
+                  if (context.mounted) {
+                    // 로그아웃 시 프리미엄 상태 초기화
+                    Provider.of<PurchaseService>(context, listen: false).clearPremiumStatus();
+                    Navigator.of(context, rootNavigator: true).pop();
+                  }
                 }
               },
               tooltip: '로그아웃',

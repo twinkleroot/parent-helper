@@ -2,7 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // SystemNavigator.pop()을 위해 추가
 import 'package:provider/provider.dart';
 import 'package:permission_handler/permission_handler.dart';
-// import 'package:shared_preferences/shared_preferences.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // FirebaseAuth 임포트
+import 'package:shared_preferences/shared_preferences.dart';
 // import '../services/ad_service.dart';
 import '../services/data_repository.dart';
 import '../services/firestore_service.dart';
@@ -32,8 +33,16 @@ class _SplashScreenState extends State<SplashScreen> {
   // 광고 로드와 권한 확인 로직 분리
   Future<void> _initializeApp() async {
     // 1. SharedPreferences로 첫 실행 여부 확인
-    // final prefs = await SharedPreferences.getInstance();
+    final prefs = await SharedPreferences.getInstance();
     // final bool isFirstRun = prefs.getBool('is_first_run') ?? true;
+
+    // 재설치 시 자동 로그인 방지 및 무료 유저 초기화 로직
+    final bool isFirstRunAuthCheck = prefs.getBool('is_first_run_auth_check') ?? true;
+    if (isFirstRunAuthCheck) {
+      logger.i('첫 실행/재설치 감지: 기존 자동 로그인 세션을 안전하게 초기화합니다.');
+      await FirebaseAuth.instance.signOut();
+      await prefs.setBool('is_first_run_auth_check', false);
+    }
 
     // FirestoreService 초기화 (uid는 아직 없으므로 null)
     final firestoreService = FirestoreService(uid: null);

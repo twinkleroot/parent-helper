@@ -167,6 +167,7 @@ class PopupService {
     }
   }
 
+  // 앱 실행 횟수 기반 리뷰 요청 팝업
   Future<void> checkReviewPopup(BuildContext context, AppConfig config) async {
     final prefs = await SharedPreferences.getInstance();
 
@@ -199,17 +200,17 @@ class PopupService {
           ),
           content: const Text(
               '등하원 알리미를 꾸준히 사용해 주셔서 정말 감사합니다!\n\n'
-                  '1분만 시간을 내어 따뜻한 리뷰와 별점을 남겨주시면, '
-                  '개발자에게 정말 큰 힘이 됩니다. 🥺💛'
+              '1분만 시간을 내어 따뜻한 리뷰와 별점을 남겨주시면, '
+              '개발자에게 정말 큰 힘이 됩니다. 🥺💛'
           ),
           actions: [
-            TextButton(
-              onPressed: () async {
-                await prefs.setBool('has_reviewed', true); // 다시 보지 않기
-                if (ctx.mounted) Navigator.pop(ctx);
-              },
-              child: const Text('다시 보지 않기', style: TextStyle(color: Colors.grey)),
-            ),
+            // TextButton(
+            //   onPressed: () async {
+            //     await prefs.setBool('has_reviewed', true); // 다시 보지 않기
+            //     if (ctx.mounted) Navigator.pop(ctx);
+            //   },
+            //   child: const Text('다시 보지 않기', style: TextStyle(color: Colors.grey)),
+            // ),
             TextButton(
               onPressed: () {
                 Navigator.pop(ctx); // 나중에 (다음 10회째에 다시 뜸)

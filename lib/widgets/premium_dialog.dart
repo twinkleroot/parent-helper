@@ -36,22 +36,39 @@ void showPremiumDialog(BuildContext context, {String message = ''}) {
           style: const TextStyle(height: 1.5, fontSize: 14),
         ),
       ),
+      // [수정] 양옆으로 분리하여 구매 내역 복원 버튼 추가
+      actionsAlignment: MainAxisAlignment.spaceBetween,
       actions: [
         TextButton(
-          child: const Text('나중에', style: TextStyle(color: Colors.grey)),
-          onPressed: () => Navigator.pop(ctx),
-        ),
-        ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: Colors.brown.shade600,
-            foregroundColor: Colors.white,
-          ),
+          child: const Text('구매 복원', style: TextStyle(color: Colors.blueGrey, decoration: TextDecoration.underline)),
           onPressed: () {
             Navigator.pop(ctx);
-            // 결제(후원) 프로세스 시작
-            Provider.of<PurchaseService>(context, listen: false).buyPremium();
+            // 구글 플레이스토어 수동 복원 트리거
+            Provider.of<PurchaseService>(context, listen: false).restorePlayStorePurchases();
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('결제 내역을 확인 중입니다. 잠시만 기다려주세요...')),
+            );
           },
-          child: const Text('개발자 후원하고 혜택받기'),
+        ),
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextButton(
+              child: const Text('나중에', style: TextStyle(color: Colors.grey)),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.brown.shade600,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                Navigator.pop(ctx);
+                Provider.of<PurchaseService>(context, listen: false).buyPremium();
+              },
+              child: const Text('개발자 후원하고 혜택받기'),
+            ),
+          ],
         ),
       ],
     ),

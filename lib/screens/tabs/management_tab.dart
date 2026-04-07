@@ -299,14 +299,9 @@ class ManagementTab extends StatelessWidget {
   }
 
   // 계정 연동 (로그인) 핸들러
+  // [수정] 조건문을 변경하여 누구나 구글 로그인을 시도할 수 있도록 허용하고,
+  // 로그인 직후 테스터 및 서버 기록을 확인하여 프리미엄 여부를 판별합니다.
   Future<void> _handleLinkAccount(BuildContext context) async {
-    // 1. 프리미엄 체크
-    final purchaseService = Provider.of<PurchaseService>(context, listen: false);
-    if (!purchaseService.isPremium) {
-      showPremiumDialog(context, message: '✨ 무료버전에서는 데이터 서버 백업 및 동기화 기능을 이용할 수 없습니다.');
-      return;
-    }
-
     // 로딩 표시
     showDialog(
       context: context,
@@ -314,31 +309,52 @@ class ManagementTab extends StatelessWidget {
       builder: (ctx) => const Center(child: CircularProgressIndicator()),
     );
 
+    // 1. 프리미엄 체크
+    // final purchaseService = Provider.of<PurchaseService>(context, listen: false);
+    // showPremiumDialog(context, message: '✨ 무료버전에서는 데이터 서버 백업 및 동기화 기능을 이용할 수 없습니다.');
+
     try {
       final authService = Provider.of<AuthService>(context, listen: false);
       final dataRepository = Provider.of<DataRepository>(context, listen: false);
       // final adService = Provider.of<AdService>(context, listen: false);
+      final purchaseService = Provider.of<PurchaseService>(context, listen: false);
 
       // 로그인 화면으로 넘어갔다가 돌아올 때 광고가 뜨지 않도록 스킵 설정
       // adService.skipNextAppOpenAd();
 
       // 로그인 시도 (내부적으로 데이터 동기화 syncLocalDataToFirestore 실행됨)
+      // 1. 구글 연동 로그인 진행
       final user = await authService.signInWithGoogle();
 
-      // 로딩 닫기
-      if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
-
       if (user != null) {
-        // 로그인 성공 시 Repository의 Auth 상태를 수동으로 즉시 갱신
-        dataRepository.updateAuth(user);
+        // 2. 로그인 성공 시, 해당 계정이 테스터 계정인지, 이전에 서버에 백업된 프리미엄 유저인지 확인
+        final bool isPremiumUser = await purchaseService
+            .verifyAndRestorePremiumAfterLogin();
 
-        if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('계정이 연동되고 데이터가 안전하게 백업되었습니다.')),
-          );
+        // 로딩 닫기
+        if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
+
+        if (isPremiumUser) {
+          // 3-A. 프리미엄 권한 확인됨 -> 데이터 서버 동기화 시작
+          dataRepository.updateAuth(user);
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('프리미엄 계정이 확인되어 데이터가 안전하게 연동되었습니다.')),
+            );
+          }
+        } else {
+          // 3-B. 일반 계정임 -> 백업 불가하므로 로그아웃 시키고 결제 유도
+          await authService.signOut();
+          if (context.mounted) {
+            showPremiumDialog(
+                context,
+                message: '데이터 클라우드 백업 및 동기화는 프리미엄 전용 기능입니다.\n기존에 구매하셨다면 하단의 [구매 복원]을 먼저 눌러주세요.'
+            );
+          }
         }
       } else {
-        // 로그인 취소 또는 실패
+        // 로그인 창 닫기 취소 시
+        if (context.mounted) Navigator.of(context, rootNavigator: true).pop();
       }
     } catch (e) {
       // 로딩 닫기
@@ -367,9 +383,22 @@ class ManagementTab extends StatelessWidget {
     ) ?? false;
 
     if (confirm && context.mounted) {
+      // 로그아웃 진행 중 로딩 인디케이터 표시
+      showDialog(
+        context: context,
+        barrierDismissible: false,
+        builder: (ctx) => const Center(child: CircularProgressIndicator()),
+      );
+
       final authService = Provider.of<AuthService>(context, listen: false);
       await authService.signOut();
+
       // 로그아웃 후에는 자동으로 로컬 DB 모드로 전환됩니다 (DataRepository 로직)
+      // 로그아웃 완료 후 상태 초기화 및 로딩 창 닫기
+      if (context.mounted) {
+        Provider.of<PurchaseService>(context, listen: false).clearPremiumStatus();
+        Navigator.of(context, rootNavigator: true).pop();
+      }
     }
   }
 
@@ -452,6 +481,10 @@ class ManagementTab extends StatelessWidget {
       if (deleted) {
         logger.i('계정 삭제가 성공적으로 완료되었습니다.');
         // AuthGate가 이 시점 이후에 리빌드되며 자동으로 로그인 화면으로 이동시킵니다.
+        // 계정 삭제 시에도 프리미엄 권한 초기화
+        if (context.mounted) {
+          Provider.of<PurchaseService>(context, listen: false).clearPremiumStatus();
+        }
       } else {
         logger.w('사용자 재인증 취소 등으로 계정 삭제가 완료되지 않았습니다.');
       }
