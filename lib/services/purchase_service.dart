@@ -160,11 +160,9 @@ class PurchaseService extends ChangeNotifier {
       logger.e('스토어를 사용할 수 없거나 상품 정보가 없습니다.');
       return;
     }
-    // 로드된 상품 리스트에서 현재 설정된 ID의 상품을 찾아 구매 요청
-    final ProductDetails productDetails = _products.firstWhere(
-            (p) => p.id == _currentProductId,
-        orElse: () => _products.first
-    );
+    // orElse 타입 캐스팅 에러 방지를 위해 indexWhere를 사용하여 안전하게 추출
+    final int index = _products.indexWhere((p) => p.id == _currentProductId);
+    final ProductDetails productDetails = index != -1 ? _products[index] : _products.first;
 
     final PurchaseParam purchaseParam = PurchaseParam(productDetails: productDetails);
 
