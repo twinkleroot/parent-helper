@@ -1,8 +1,10 @@
 // import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_analytics/firebase_analytics.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:timezone/data/latest.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:google_sign_in/google_sign_in.dart';
@@ -32,6 +34,17 @@ void main() async {
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
   // (앱 실행 시 자동으로 데이터 수집 시작)
   FirebaseAnalytics analytics = FirebaseAnalytics.instance;
+
+  // PurchaseService 생성 전, 가장 먼저 유령 세션 및 잔여 프리미엄 상태를 완벽 초기화
+  final prefs = await SharedPreferences.getInstance();
+  final bool isFirstRunAuthCheck = prefs.getBool('is_first_run_auth_check') ?? true;
+  if (isFirstRunAuthCheck) {
+    logger.i('첫 실행/재설치 감지: 기존 세션 및 프리미엄 상태를 완전 초기화합니다.');
+    await FirebaseAuth.instance.signOut();
+    await prefs.setBool('is_premium_user', false); // 로컬 프리미엄 상태 강제 해제
+    await prefs.remove('is_legacy_user_grant_pending');
+    await prefs.setBool('is_first_run_auth_check', false);
+  }
 
   await GoogleSignIn.instance.initialize(
     serverClientId: dotenv.env['GOOGLE_LOGIN_WEB_CLIENT_ID'],
