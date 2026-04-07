@@ -11,8 +11,12 @@ class PopupService {
   // 버전 문자열 비교 (ex: 1.0.0 vs 1.0.1)
   // current < target 이면 true
   bool _isVersionLower(String current, String target) {
-    List<int> cParts = current.split('.').map((e) => int.tryParse(e) ?? 0).toList();
-    List<int> tParts = target.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    // [핵심 수정] '+버전(빌드넘버)' 제거하여 순수 버전 숫자만 남김 (예: 1.0.3+4 -> 1.0.3)
+    String cleanCurrent = current.split('+')[0];
+    String cleanTarget = target.split('+')[0];
+
+    List<int> cParts = cleanCurrent.split('.').map((e) => int.tryParse(e) ?? 0).toList();
+    List<int> tParts = cleanTarget.split('.').map((e) => int.tryParse(e) ?? 0).toList();
 
     for (int i = 0; i < 3; i++) {
       int c = i < cParts.length ? cParts[i] : 0;
@@ -108,30 +112,40 @@ class PopupService {
     // 2. 업데이트 권장 (기간 내 & 버전 낮음)
     if (_isWithinDateRange(config.updateNoticeStart, config.updateNoticeEnd) &&
         _isVersionLower(currentVersion, config.latestVersion)) {
-      if (!context.mounted) return;
 
-      // 오늘 하루 보지 않기 등을 구현하려면 SharedPreferences 추가 필요
-      // 여기서는 단순 표시
-      await showDialog(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: const Text('새로운 버전 업데이트'),
-          content: Text('최신 버전(${config.latestVersion})이 출시되었습니다.\n지금 업데이트 하시겠습니까?'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(ctx),
-              child: const Text('나중에', style: TextStyle(color: Colors.grey)),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                _launchStore(config.storeUrl);
-                Navigator.pop(ctx);
-              },
-              child: const Text('지금 업데이트'),
-            ),
-          ],
-        ),
-      );
+      // 사용자가 해당 버전 업데이트 안내를 더 이상 보지 않겠다고 했는지 체크
+      final bool hideUpdate = prefs.getBool('hide_update_${config.latestVersion}') ?? false;
+
+      if (!hideUpdate && context.mounted) {
+        await showDialog(
+          context: context,
+          builder: (ctx) =>
+              AlertDialog(
+                title: const Text('새로운 버전 업데이트'),
+                content: Text('최신 버전(${config.latestVersion})이 출시되었습니다.\n지금 업데이트 하시겠습니까?'),
+                actions: [
+                  TextButton(
+                    onPressed: () async {
+                      await prefs.setBool('hide_update_${config.latestVersion}', true);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                    },
+                    child: const Text('다시 보지 않기', style: TextStyle(color: Colors.grey)),
+                  ),
+                  TextButton(
+                    onPressed: () => Navigator.pop(ctx),
+                    child: const Text('나중에', style: TextStyle(color: Colors.grey)),
+                  ),
+                  ElevatedButton(
+                    onPressed: () {
+                      _launchStore(config.storeUrl);
+                      Navigator.pop(ctx);
+                    },
+                    child: const Text('지금 업데이트'),
+                  ),
+                ],
+              ),
+        );
+      }
     }
 
     // 3. 일반 공지사항 (기간 내)
